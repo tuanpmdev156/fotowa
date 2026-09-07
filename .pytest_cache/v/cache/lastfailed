@@ -1,0 +1,5 @@
+{
+  "tests/test_login.py::test_login_form_is_displayed[chromium]": true,
+  "tests/test_login.py::test_submit_with_empty_fields_stays_on_login_page[chromium]": true,
+  "tests/test_login.py::test_invalid_credentials_show_error[chromium]": true
+}

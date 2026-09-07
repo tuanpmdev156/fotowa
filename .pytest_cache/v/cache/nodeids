@@ -1,0 +1,12 @@
+[
+  "tests/test_example.py::test_homepage_has_playwright_in_title[chromium]",
+  "tests/test_example.py::test_homepage_has_playwright_in_title[firefox]",
+  "tests/test_example.py::test_homepage_has_playwright_in_title[webkit]",
+  "tests/test_example.py::test_todo_app[chromium]",
+  "tests/test_example.py::test_todo_app[firefox]",
+  "tests/test_example.py::test_todo_app[webkit]",
+  "tests/test_login.py::test_invalid_credentials_show_error[chromium]",
+  "tests/test_login.py::test_login_form_is_displayed[chromium]",
+  "tests/test_login.py::test_submit_with_empty_fields_stays_on_login_page[chromium]",
+  "tests/test_login.py::test_valid_credentials_leave_login_page[chromium]"
+]
