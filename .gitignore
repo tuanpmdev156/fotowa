@@ -1,2 +1,9 @@
 # Playwright auth session
 .auth/
+
+# Local environment variables / credentials
+.env
+.venv/
+.__pycache__
+.pytest_cache
+test-results/
