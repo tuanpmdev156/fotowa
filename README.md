@@ -10,7 +10,8 @@ Bộ test UI end-to-end cho dự án Fotowa, viết bằng
 | Công cụ | Phiên bản | Ghi chú |
 |---|---|---|
 | Python | 3.13 | `.venv` trong repo là CPython 3.13.13, bản native cho Windows |
-| [uv](https://docs.astral.sh/uv/) | 0.11+ | Dùng để tạo venv và cài package — venv này **không có `pip`** |
+| [uv](https://docs.astral.sh/uv/) | 0.11+ | Dùng để tạo venv và cài package (nhanh hơn `pip`, tự tải đúng bản Python) |
+| pip | 26.2.1 | Có sẵn trong venv nhờ cờ `--seed`, dùng thay `uv` được nếu bạn quen hơn |
 | Playwright | 1.62.0 | Cài kèm `pytest-playwright==0.6.2` trong `requirements.txt` |
 | Google Chrome | 152.0.7977.77 | Test chạy trên Chrome đã cài trong máy (`channel="chrome"`), không dùng Chromium đi kèm |
 
@@ -26,13 +27,10 @@ Toàn bộ câu lệnh dưới đây là PowerShell, chạy từ thư mục gố
 ### 1. Tạo virtualenv và cài dependency
 
 ```powershell
-uv venv --python 3.13
+uv venv --python 3.13 --seed
 uv pip install -r requirements.txt
 .venv\Scripts\python.exe -m playwright install chromium
 ```
-
-> Venv được tạo bởi `uv` nên không có module `pip`. Luôn cài bằng `uv pip install ...`;
-> chạy `python -m pip` sẽ báo lỗi *No module named pip*.
 
 ### 2. Cấu hình biến môi trường
 
@@ -171,9 +169,6 @@ Xem phần quy ước locator ở trên — thu hẹp selector hoặc dùng `.fi
 **Timeout khi chờ form đăng nhập**
 Rất có thể bạn đang ở trang Google SSO, không phải form của fotowa. Chạy lại
 `scripts/save_auth.py` — session đã lưu có lẽ đã hết hạn.
-
-**`No module named pip`**
-Đây là điều bình thường. Hãy dùng `uv pip install ...`.
 
 **`launch_persistent_context` fail / profile bị lock**
 Đóng mọi cửa sổ Chrome đang dùng `.auth/chrome-profile` rồi thử lại.
