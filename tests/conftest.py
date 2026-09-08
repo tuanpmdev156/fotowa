@@ -22,9 +22,7 @@ load_dotenv(ROOT / ".env")
 
 # Test lấy trạng thái đăng nhập từ `storage_state`: chạy `scripts/save_auth.py` một lần để ghi ra `.auth/storage_state.json`, sau đó mọi test dùng lại cookie đó.
 
-# Timeout mặc định cho mọi action/navigation/assertion, đặt một chỗ duy nhất ở
-# fixture `page` bên dưới. Đổi được qua `.env` mà không phải sửa code, và KHÔNG
-# liên quan tới `GOOGLE_SSO_LOGIN_TIMEOUT_MS` (biến đó chỉ dành cho `scripts/save_auth.py`).
+# Timeout mặc định cho mọi action/navigation/assertion, đặt một chỗ duy nhất ở fixture `page` bên dưới. 
 DEFAULT_TIMEOUT_MS = int(os.getenv("DEFAULT_TIMEOUT_MS", 30000))
 
 AUTH_DIR = Path(os.getenv("AUTH_DIR", ROOT / ".auth"))
@@ -102,9 +100,8 @@ def credentials() -> tuple[str, str]:
 
 @pytest.fixture(scope="session")
 def logged_in(login_page: LoginPage, credentials: tuple[str, str]) -> None:
-    """Đảm bảo đã đăng nhập app fotowa, trước khi mở trang cần đăng nhập.
+    """Đảm bảo đã đăng nhập app fotowa trước khi truy cập các trang khác.
 
-    `storage_state` chỉ đưa ta qua cổng SSO của staging; app vẫn coi ta là khách.
     Fixture này đăng nhập qua form một lần cho cả session. Nếu test đăng nhập chạy
     trước đã login rồi thì `is_logged_in()` ngắn mạch, không làm lại.
     """
@@ -118,7 +115,7 @@ def logged_in(login_page: LoginPage, credentials: tuple[str, str]) -> None:
     assert login_page.is_logged_in(), "Failed to log in to the fotowa app"
 
 
-# Phụ thuộc `logged_in`: page object chỉ được tạo sau khi đăng nhập xong.
+# Phụ thuộc `logged_in` state: page object chỉ được tạo sau khi đăng nhập xong.
 @pytest.fixture(scope="session")
 def photographer_profile_page(
     page: Page, base_url: str, logged_in: None
