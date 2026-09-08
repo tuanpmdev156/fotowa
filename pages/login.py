@@ -31,12 +31,18 @@ class LoginPage:
 
     # --- kiểm tra (assertion) ---
     def goto_login_page(self):
-        self.page.wait_for_load_state("networkidle")
+        # Không cần `wait_for_load_state`: `expect` tự retry tới khi element hiện.
         expect(self.login_link).to_be_visible()
         self.login_link.click()
 
+    def is_logged_in(self) -> bool:
+        # `is_visible()` kiểm tra tức thời, không retry - nên vẫn cần chờ DOM loadxong. 
+        # Dùng state "load" mặc định; "networkidle" bị Playwright khuyến cáo không dùng
+        # Trên fotowa gần như không bao giờ đạt được state trên vì các beacon analytics (GA, Clarity, Facebook pixel) chạy liên tục.
+        self.page.wait_for_load_state()
+        return not self.login_link.is_visible()
+
     def expect_login_form_loaded(self):
-        self.page.wait_for_load_state("networkidle")
         expect(self.email_input).to_be_visible()
         expect(self.password_input).to_be_visible()
         expect(self.login_button).to_be_enabled()

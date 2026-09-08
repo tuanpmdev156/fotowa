@@ -51,7 +51,7 @@ notepad .env
 | `AUTH_DIR` | `.auth` | Nơi lưu dữ liệu session |
 | `AUTH_STATE` | `.auth/storage_state.json` | Cookie đã lưu |
 | `AUTOMATION_PROFILE_DIR` | `.auth/chrome-profile` | Chrome profile riêng cho `save_auth.py`, giúp Google nhớ bạn giữa các lần đăng nhập tay |
-| `LOGIN_TIMEOUT_MS` | `300000` | Thời gian `save_auth.py` chờ bạn hoàn tất SSO |
+| `GOOGLE_SSO_LOGIN_TIMEOUT_MS` | `300000` | Thời gian `save_auth.py` chờ bạn hoàn tất SSO |
 
 Biến set sẵn trong shell sẽ thắng `.env`, nên bạn có thể ghi đè tạm thời cho một lần chạy:
 

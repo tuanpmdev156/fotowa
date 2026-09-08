@@ -40,7 +40,7 @@ The staging site sits behind **Google SSO (AWS Cognito → Google IdP)** — the
 username/password form at the front door. So:
 
 1. Run `.venv\Scripts\python.exe scripts\save_auth.py` once. It opens Chrome with a dedicated
-   persistent profile (`.auth/chrome-profile`), waits (default 300s, `LOGIN_TIMEOUT_MS`) for a
+   persistent profile (`.auth/chrome-profile`), waits (default 300s, `GOOGLE_SSO_LOGIN_TIMEOUT_MS`) for a
    redirect back to `BASE_URL`'s host (excluding `/oauth2/*`), then dumps
    `.auth/storage_state.json`.
 2. `conftest.browser_context` loads that `storage_state` if the file exists (absent is tolerated —
@@ -59,7 +59,7 @@ win over the file.
 - `TEST_EMAIL`, `TEST_PASSWORD` — tests needing an account are **skipped** if either is empty
   (`requires_account` marker in `tests/test_login.py`).
 - `AUTH_DIR` (`.auth`), `AUTH_STATE` (`.auth/storage_state.json`),
-  `AUTOMATION_PROFILE_DIR` (`.auth/chrome-profile`), `LOGIN_TIMEOUT_MS` (300000).
+  `AUTOMATION_PROFILE_DIR` (`.auth/chrome-profile`), `GOOGLE_SSO_LOGIN_TIMEOUT_MS` (300000).
 
 ## Conventions that bite if ignored
 

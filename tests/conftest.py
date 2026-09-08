@@ -1,45 +1,59 @@
 import os
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 from dotenv import load_dotenv
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import (
+    BrowserContext,
+    Page,
+    Playwright,
+    expect,
+    sync_playwright,
+)
 
 from pages.login import LoginPage
+from pages.photographer_profile import PhotographerProfilePage
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# Thông tin đăng nhập và URL đích nằm trong `.env` (copy từ `.env.example`). Load ở
-# đây vì conftest được import trước các module test, mà các module đó đọc biến môi
-# trường ngay lúc import. Biến môi trường thật luôn được ưu tiên hơn file.
+# Thông tin đăng nhập và URL đích nằm trong `.env` (copy từ `.env.example`).
 load_dotenv(ROOT / ".env")
 
 # Test lấy trạng thái đăng nhập từ `storage_state`: chạy `scripts/save_auth.py` một lần để ghi ra `.auth/storage_state.json`, sau đó mọi test dùng lại cookie đó.
+
+# Timeout mặc định cho mọi action/navigation/assertion, đặt một chỗ duy nhất ở
+# fixture `page` bên dưới. Đổi được qua `.env` mà không phải sửa code, và KHÔNG
+# liên quan tới `GOOGLE_SSO_LOGIN_TIMEOUT_MS` (biến đó chỉ dành cho `scripts/save_auth.py`).
+DEFAULT_TIMEOUT_MS = int(os.getenv("DEFAULT_TIMEOUT_MS", 30000))
 
 AUTH_DIR = Path(os.getenv("AUTH_DIR", ROOT / ".auth"))
 AUTH_STATE = Path(os.getenv("AUTH_STATE", AUTH_DIR / "storage_state.json"))
 
 
 @pytest.fixture(scope="session")
-def base_url():
-    # BASE_URL phải đến từ `.env` (hoặc từ biến môi trường của shell). 
+def base_url() -> str:
+    # BASE_URL phải đến từ `.env` (hoặc từ biến môi trường của shell).
     url = os.getenv("BASE_URL")
     if not url:
         pytest.fail(
-            "Chưa có BASE_URL. Hãy copy `.env.example` thành `.env` rồi điền BASE_URL.",
+            "BASE_URL is not set. Copy `.env.example` to `.env` and fill in BASE_URL.",
             pytrace=False,
         )
     return url.rstrip("/")
 
 
 @pytest.fixture(scope="session")
-def playwright_instance():
+def playwright_instance() -> Iterator[Playwright]:
     with sync_playwright() as p:
         yield p
 
 
+# Muốn browser dừng lại và KHÔNG đóng khi có lỗi: chạy `pytest --pdb`. pytest hoãn
+# teardown của fixture cho tới lúc bạn thoát debugger, nên cửa sổ Chrome vẫn sống và
+# giữ nguyên state ở thời điểm fail.
 @pytest.fixture(scope="session")
-def browser_context(playwright_instance):
+def browser_context(playwright_instance: Playwright) -> Iterator[BrowserContext]:
     p = playwright_instance
 
     browser = p.chromium.launch(channel="chrome", headless=False)
@@ -51,20 +65,62 @@ def browser_context(playwright_instance):
     browser.close()
 
 
-# Hai fixture này ghi đè `context`/`page` gốc của pytest-playwright, bỏ qua fixture `new_context` của plugin, nên --screenshot và --tracing trong pytest.ini không hoạt động.
+# Hai fixture này ghi đè `context`/`page` gốc của pytest-playwright, bỏ qua fixture `new_context` của plugin,
+# nên --screenshot và --tracing trong pytest.ini không hoạt động.
 @pytest.fixture(scope="session")
-def context(browser_context):
+def context(browser_context: BrowserContext) -> BrowserContext:
     return browser_context
 
 
 # Scope = session: dùng một tab cho các test cases
 @pytest.fixture(scope="session")
-def page(context):
+def page(context: BrowserContext) -> Iterator[Page]:
     page = context.new_page()
+    # Ba loại timeout riêng biệt: action, navigation, và assertion của `expect`
+    # (mặc định chỉ 5s và không chịu ảnh hưởng của hai cái kia).
+    page.set_default_timeout(DEFAULT_TIMEOUT_MS)
+    page.set_default_navigation_timeout(DEFAULT_TIMEOUT_MS)
+    expect.set_options(timeout=DEFAULT_TIMEOUT_MS)
     yield page
     page.close()
 
 
 @pytest.fixture(scope="session")
-def login_page(page, base_url):
+def login_page(page: Page, base_url: str) -> LoginPage:
     return LoginPage(page, base_url)
+
+
+@pytest.fixture(scope="session")
+def credentials() -> tuple[str, str]:
+    """Tài khoản user fotowa."""
+    email = os.getenv("TEST_EMAIL")
+    password = os.getenv("TEST_PASSWORD")
+    if not (email and password):
+        pytest.skip("Must set TEST_EMAIL and TEST_PASSWORD in `.env`")
+    return email, password
+
+
+@pytest.fixture(scope="session")
+def logged_in(login_page: LoginPage, credentials: tuple[str, str]) -> None:
+    """Đảm bảo đã đăng nhập app fotowa, trước khi mở trang cần đăng nhập.
+
+    `storage_state` chỉ đưa ta qua cổng SSO của staging; app vẫn coi ta là khách.
+    Fixture này đăng nhập qua form một lần cho cả session. Nếu test đăng nhập chạy
+    trước đã login rồi thì `is_logged_in()` ngắn mạch, không làm lại.
+    """
+    login_page.goto_home_page()
+    if login_page.is_logged_in():
+        return
+
+    login_page.goto_login_page()
+    login_page.expect_login_form_loaded()
+    login_page.login(*credentials)
+    assert login_page.is_logged_in(), "Failed to log in to the fotowa app"
+
+
+# Phụ thuộc `logged_in`: page object chỉ được tạo sau khi đăng nhập xong.
+@pytest.fixture(scope="session")
+def photographer_profile_page(
+    page: Page, base_url: str, logged_in: None
+) -> PhotographerProfilePage:
+    return PhotographerProfilePage(page, base_url)

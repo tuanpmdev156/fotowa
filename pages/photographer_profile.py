@@ -31,8 +31,9 @@ class PhotographerProfilePage:
     # --- kiểm tra (assertion) ---
 
     def expect_calendar_loaded(self):
-        self.page.wait_for_load_state("networkidle")
+        # `expect` tự retry tới DEFAULT_TIMEOUT_MS, không cần chờ load state.
         expect(self.calendar).to_be_visible()
 
     def expect_has_available_date(self):
-        assert self.available_dates.count() > 0, "No available day in calendar"
+        # `not_to_have_count(0)` retry tới DEFAULT_TIMEOUT_MS
+        expect(self.available_dates).not_to_have_count(0)
