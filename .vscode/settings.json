@@ -1,0 +1,46 @@
+{
+  // Dùng đúng venv của repo, không phải Python hệ thống.
+  "python.defaultInterpreterPath": ".venv/Scripts/python.exe",
+
+  // --- phát hiện lỗi ---
+  // "workspace": quét cả project, không chỉ file đang mở -> import vỡ sau khi
+  // rename sẽ hiện ở Problems ngay cả khi file đó đang đóng.
+  "python.analysis.diagnosticMode": "workspace",
+  "python.analysis.typeCheckingMode": "basic",
+  // Cho Pylance biết root nằm ở đâu, khớp với `pythonpath = .` trong pytest.ini,
+  // để `from pages.login import LoginPage` resolve được.
+  "python.analysis.extraPaths": ["."],
+
+  // --- gợi ý code ---
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.inlayHints.functionReturnTypes": true,
+  "python.analysis.inlayHints.variableTypes": true,
+  // Rename file tự sửa import ở mọi nơi, không hỏi lại.
+  "python.analysis.updateImportsOnFileMove.enabled": "always",
+  "editor.suggestSelection": "first",
+  "editor.inlineSuggest.enabled": true,
+  "[python]": {
+    "editor.quickSuggestions": {
+      "other": true,
+      "comments": false,
+      "strings": true
+    },
+    "editor.suggest.showStatusBar": true,
+    "editor.wordBasedSuggestions": "off"
+  },
+
+  // --- test ---
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestArgs": ["tests"],
+
+  // --- bớt nhiễu ---
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/.pytest_cache": true
+  },
+  "search.exclude": {
+    ".venv": true,
+    ".auth": true
+  }
+}
