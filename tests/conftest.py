@@ -12,6 +12,7 @@ from playwright.sync_api import (
     sync_playwright,
 )
 
+from pages.booking_request import BookingRequestPage
 from pages.login import LoginPage
 from pages.photographer_profile import PhotographerProfilePage
 
@@ -121,3 +122,10 @@ def photographer_profile_page(
     page: Page, base_url: str, logged_in: None
 ) -> PhotographerProfilePage:
     return PhotographerProfilePage(page, base_url)
+
+
+# Không cần `logged_in`: ta tới trang này bằng click từ calendar, nên nó luôn
+# chạy sau test đã đăng nhập.
+@pytest.fixture(scope="session")
+def booking_request_page(page: Page, base_url: str) -> BookingRequestPage:
+    return BookingRequestPage(page, base_url)

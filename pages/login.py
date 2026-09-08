@@ -43,9 +43,6 @@ class LoginPage:
         expect(self.password_input).to_be_visible()
         expect(self.login_button).to_be_enabled()
 
-    def expect_error(self, message: str):
-        expect(self.error_message).to_be_visible()
-        expect(self.error_message).to_contain_text(message)
-
-    def expect_still_on_login_page(self):
-        expect(self.page).to_have_url(self.base_url)
+    # def expect_error(self, message: str):
+    #     expect(self.error_message).to_be_visible()
+    #     expect(self.error_message).to_contain_text(message)
