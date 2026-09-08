@@ -14,26 +14,29 @@ ROOT = Path(__file__).resolve().parent.parent
 # trường ngay lúc import. Biến môi trường thật luôn được ưu tiên hơn file.
 load_dotenv(ROOT / ".env")
 
-# Có hai cách để có một trình duyệt đã đăng nhập:
+# Test lấy trạng thái đăng nhập từ `storage_state`: chạy `scripts/save_auth.py` một
+# lần để ghi ra `.auth/storage_state.json`, sau đó mọi test dùng lại cookie đó.
 #
-#   1. storage_state (mặc định). Chạy `scripts/save_auth.py` một lần để ghi ra
-#      `.auth/storage_state.json`, sau đó mọi test dùng lại cookie đó.
-#   2. Profile automation cố định, bật bằng USE_CHROME_PROFILE=1. Dùng lại
-#      `.auth/chrome-profile`, profile này giữ trạng thái đăng nhập qua các lần chạy.
-#
-# Cả hai cách đều không thể dùng `Profile 15` thật của bạn: Chrome 136+ từ chối
-# remote debugging trên user-data-dir mặc định, còn App-Bound Encryption khiến
-# cookie của một profile được copy sang chỗ khác không giải mã được.
-# `scripts/save_auth.py` tồn tại để lấp khoảng trống đó bằng một lần đăng nhập tay.
-USE_CHROME_PROFILE = os.getenv("USE_CHROME_PROFILE") == "1"
+# Không dùng được `Profile 15` thật của bạn: Chrome 136+ từ chối remote debugging
+# trên user-data-dir mặc định, còn App-Bound Encryption khiến cookie của một profile
+# được copy sang chỗ khác không giải mã được. `scripts/save_auth.py` tồn tại để lấp
+# khoảng trống đó bằng một lần đăng nhập tay.
 AUTH_DIR = Path(os.getenv("AUTH_DIR", ROOT / ".auth"))
 AUTH_STATE = Path(os.getenv("AUTH_STATE", AUTH_DIR / "storage_state.json"))
-PROFILE_DIR = Path(os.getenv("AUTOMATION_PROFILE_DIR", AUTH_DIR / "chrome-profile"))
 
 
 @pytest.fixture(scope="session")
 def base_url():
-    return os.getenv("BASE_URL", "https://master.review.fotowa.com")
+    # Không có giá trị mặc định trong code: BASE_URL phải đến từ `.env` (hoặc từ
+    # biến môi trường của shell). Thiếu thì fail ngay với thông báo rõ ràng, thay
+    # vì âm thầm chạy test lên một site không ai ngờ tới.
+    url = os.getenv("BASE_URL")
+    if not url:
+        pytest.fail(
+            "Chưa có BASE_URL. Hãy copy `.env.example` thành `.env` rồi điền BASE_URL.",
+            pytrace=False,
+        )
+    return url.rstrip("/")
 
 
 @pytest.fixture(scope="session")
@@ -45,16 +48,6 @@ def playwright_instance():
 @pytest.fixture(scope="session")
 def browser_context(playwright_instance):
     p = playwright_instance
-
-    if USE_CHROME_PROFILE:
-        context = p.chromium.launch_persistent_context(
-            user_data_dir=str(PROFILE_DIR),
-            channel="chrome",
-            headless=False,
-        )
-        yield context
-        context.close()
-        return
 
     browser = p.chromium.launch(channel="chrome", headless=False)
     # Chưa có state đã lưu vẫn ổn với các test chỉ xem trang đăng nhập.
@@ -79,9 +72,7 @@ def context(browser_context):
 # nếu một test đầu để trang ở chỗ không mong đợi, các test sau sẽ thừa hưởng nó.
 @pytest.fixture(scope="session")
 def page(context):
-    # Context cố định đã có sẵn một trang trắng đang mở; dùng lại trang đó thay vì
-    # để lại một tab bỏ không.
-    page = context.pages[0] if context.pages else context.new_page()
+    page = context.new_page()
     yield page
     page.close()
 

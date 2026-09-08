@@ -4,6 +4,7 @@
 # Local environment variables / credentials
 .env
 .venv/
-.__pycache__
-.pytest_cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
 test-results/

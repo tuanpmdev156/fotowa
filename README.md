@@ -45,22 +45,24 @@ notepad .env
 
 | Biến | Giá trị mặc định | Mục đích |
 |---|---|---|
-| `BASE_URL` | `https://master.review.fotowa.com` | Site cần test |
-| `TEST_EMAIL` | — | Tài khoản staging; test nào cần tài khoản sẽ bị **skip** nếu để trống |
-| `TEST_PASSWORD` | — | tương tự như trên |
-| `USE_CHROME_PROFILE` | không set | `1` = dùng Chrome profile cố định, ngược lại dùng `storage_state.json` |
+| `BASE_URL` | **bắt buộc** | Site cần test, chỉ phần gốc không kèm path. Không có giá trị mặc định trong code — thiếu là test fail ngay |
+| `TEST_EMAIL` | **bắt buộc** | Tài khoản staging; test nào cần tài khoản sẽ bị **skip** nếu để trống |
+| `TEST_PASSWORD` | **bắt buộc** | tương tự như trên |
 | `AUTH_DIR` | `.auth` | Nơi lưu dữ liệu session |
 | `AUTH_STATE` | `.auth/storage_state.json` | Cookie đã lưu |
-| `AUTOMATION_PROFILE_DIR` | `.auth/chrome-profile` | Thư mục Chrome profile cố định |
+| `AUTOMATION_PROFILE_DIR` | `.auth/chrome-profile` | Chrome profile riêng cho `save_auth.py`, giúp Google nhớ bạn giữa các lần đăng nhập tay |
 | `LOGIN_TIMEOUT_MS` | `300000` | Thời gian `save_auth.py` chờ bạn hoàn tất SSO |
 
-File được `python-dotenv` load trong `tests/conftest.py` và `scripts/save_auth.py`. Biến đã
-được set sẵn trong shell thật sẽ **được ưu tiên** hơn giá trị trong file, nên secret của CI
-luôn thắng.
+Biến set sẵn trong shell sẽ thắng `.env`, nên bạn có thể ghi đè tạm thời cho một lần chạy:
+
+```powershell
+$env:BASE_URL = "https://moi-truong-khac.fotowa.com"
+.venv\Scripts\python.exe -m pytest
+```
 
 ### 3. Đăng nhập một lần
 
-Staging nằm sau **Google SSO** (AWS Cognito → Google IdP), không thể tự động hoá bằng cách
+Trang staging nằm sau **Google SSO** (AWS Cognito → Google IdP), không thể tự động hoá bằng cách
 điền form thông thường. Hãy đăng nhập tay một lần rồi tái sử dụng session:
 
 ```powershell
@@ -71,34 +73,36 @@ Một cửa sổ Chrome sẽ mở với profile automation riêng. Bạn hoàn t
 trình duyệt quay về một trang fotowa, cookie sẽ được ghi vào `.auth/storage_state.json` và
 mọi test tự động dùng lại.
 
-> **Tại sao không dùng Chrome profile thường của bạn?** Chrome 136+ từ chối remote debugging
-> trên user-data-dir mặc định, và App-Bound Encryption khiến cookie của một profile được
-> copy sang chỗ khác không giải mã được. Một profile riêng là con đường duy nhất Chrome cho
-> phép — và vì nó được giữ lại, lần đăng nhập này thường chỉ mất công một lần.
-
----
 
 ## Chạy test
 
-```powershell
-# chạy tất cả
-.venv\Scripts\python.exe -m pytest
-
-# xem test chạy chậm để quan sát
-.venv\Scripts\python.exe -m pytest --headed --slowmo 500
-
-# chạy một test
-.venv\Scripts\python.exe -m pytest tests/test_login.py::test_login_form_is_displayed
-```
-
-Hoặc activate venv trước rồi bỏ phần tiền tố:
+Chuyển sang môi trường venv trước, mỗi lần mở terminal mới làm một lần:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
-pytest
 ```
 
-Gọi `pytest` trực tiếp mà không activate sẽ không chạy được — nó không có trong `PATH`.
+Dấu hiệu thành công: đầu dòng lệnh xuất hiện tiền tố `(.venv)`. Sau đó gọi `pytest` trực tiếp:
+
+```powershell
+# chạy tất cả test files trong thư mục test/
+pytest
+
+# chạy test chạy chậm để quan sát
+pytest --headed --slowmo 500
+
+# chạy một test case cụ thể
+pytest tests/test_login.py::test_login_form_is_displayed
+```
+
+Nếu không muốn activate, gọi thẳng `python.exe` trong venv — kết quả như nhau:
+
+```powershell
+.venv\Scripts\python.exe -m pytest
+```
+
+Gọi `pytest` mà chưa activate sẽ không chạy được — nó không có trong `PATH`. Thoát môi trường
+venv bằng `deactivate`.
 
 `pytest.ini` đã set sẵn `-v --browser chromium --screenshot only-on-failure
 --tracing retain-on-failure`. Lưu ý: `conftest.py` ghi đè fixture `context`/`page` của

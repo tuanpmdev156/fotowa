@@ -3,7 +3,7 @@ r"""Đăng nhập tay một lần, rồi lưu session vào .auth/storage_state.j
     .venv\Scripts\python.exe scripts\save_auth.py
 
 Script mở một cửa sổ Chrome với profile automation riêng (`.auth/chrome-profile`),
-điều hướng tới trang đăng nhập của BASE_URL và chờ bạn hoàn tất Google SSO. Ngay khi trình duyệt quay
+điều hướng tới BASE_URL và chờ bạn hoàn tất Google SSO. Ngay khi trình duyệt quay
 về một trang fotowa, cookie sẽ được ghi vào `.auth/storage_state.json` và bộ test
 tự động dùng lại.
 
@@ -24,14 +24,19 @@ from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
+
 AUTH_DIR = Path(os.getenv("AUTH_DIR", ROOT / ".auth"))
+
 AUTH_STATE = Path(os.getenv("AUTH_STATE", AUTH_DIR / "storage_state.json"))
-PROFILE_DIR = Path(os.getenv("AUTOMATION_PROFILE_DIR", AUTH_DIR / "chrome-profile"))
-# BASE_URL là gốc của site, không kèm path - giống như trong `tests/conftest.py`.
-# Đường dẫn trang đăng nhập được ghép thêm ở đây.
-BASE_URL = os.getenv("BASE_URL", "https://master.review.fotowa.com")
-LOGIN_PATH = "/users/sign_in"
-LOGIN_URL = BASE_URL.rstrip("/") + LOGIN_PATH
+
+PROFILE_DIR = Path(os.getenv("AUTOMATION_PROFILE_DIR", 
+AUTH_DIR / "chrome-profile"))
+
+BASE_URL = os.getenv("BASE_URL")
+if not BASE_URL:
+    sys.exit("Chưa có BASE_URL. Hãy copy `.env.example` thành `.env` rồi điền BASE_URL.")
+
+BASE_URL = BASE_URL.rstrip("/")
 
 # Thời gian giữ cửa sổ mở để bạn bấm qua các bước Google SSO.
 LOGIN_TIMEOUT_MS = int(os.getenv("LOGIN_TIMEOUT_MS", 5 * 60 * 1000))
@@ -40,9 +45,14 @@ APP_HOST = urlsplit(BASE_URL).netloc
 
 
 def logged_in(url: str) -> bool:
-    """Trả về True khi đã quay lại app và không còn ở trang đăng nhập."""
+    """Trả về True khi đã quay lại đúng host của app.
+
+    Khi chưa đăng nhập, BASE_URL trả 302 sang Cognito rồi sang Google, nên host
+    lúc đó không phải APP_HOST. `/oauth2/...` bị loại trừ vì đó là bước trung
+    gian của luồng SSO, cookie session chưa chắc đã được set xong.
+    """
     parts = urlsplit(url)
-    return parts.netloc == APP_HOST and not parts.path.startswith(LOGIN_PATH)
+    return parts.netloc == APP_HOST and not parts.path.startswith("/oauth2/")
 
 
 def main() -> int:
@@ -55,7 +65,7 @@ def main() -> int:
             headless=False,
         )
         page = context.pages[0] if context.pages else context.new_page()
-        page.goto(LOGIN_URL)
+        page.goto(BASE_URL)
 
         if not logged_in(page.url):
             print(
