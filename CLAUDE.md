@@ -37,7 +37,7 @@ before a browser run — seconds instead of minutes.
 ```
 pages/login.py                       LoginPage: header ログイン link + email/password form + login-state assertions
 pages/photographer_profile.py        PhotographerProfilePage + BookingSlot dataclass (calendar)
-pages/booking_request.py             BookingRequestPage (post-slot-click page; locators confirmed)
+pages/booking_request.py             BookingRequestPage (post-slot-click page; URL + slot assertions)
 tests/conftest.py                    dotenv, session fixtures, `logged_in` gate
 tests/test_login.py                  2 tests
 tests/test_photographer_profile.py   3 tests
@@ -145,7 +145,7 @@ for it, because one method cannot serve both roles:
 
 ## The booking calendar (the tricky page object)
 
-`PhotographerProfilePage` is pinned to one staging photographer: `PATH = "/photographers/bebe"`.
+`PhotographerProfilePage` is pinned to one staging photographer: `PATH = "/photographers/takajun"`.
 
 Calendar `td`s carry **no date or time data** — an `available` cell contains only an icon. Both are
 derived from position:
@@ -156,7 +156,7 @@ derived from position:
   straddling two months renders **two** `th[@colspan]` (`colspan=3` "2026/09" + `colspan=4`
   "2026/10"), so `_read_year_month(column)` walks the colspans instead of reading one value
 
-`goto_week_with_available_date()` clicks 次週 (`//li[@class='next']/a`) up to `MAX_WEEKS = 4`
+`goto_week_with_available_date()` clicks 次週 (`//li[@class='next']/a`) up to `MAX_WEEKS = 10`
 times until the visible week has an `available` cell — staging is often fully booked and that
 is data, not a bug. It uses `.count()`, not `expect(...).not_to_have_count(0)`, so a booked week
 costs one call instead of a full `DEFAULT_TIMEOUT_MS`. The render gate after each click is
@@ -171,18 +171,26 @@ hardcoded.
 ## Current state / open items
 
 - **`pages/booking_request.py` is done and verified green.** `selected_datetime` is
-  `//div[@id='app']//div[@class='shootingDateTimeControl__details']`, and `expect_slot` asserts the
-  real format in two `to_contain_text` calls: a zero-padded date `2026/09/16` and a time **range**
+  `//div[@id='app']//div[@class='shootingDateTimeControl__details']`, and `expect_available_slot` asserts
+  the real format in two `to_contain_text` calls: a zero-padded date `2026/09/16` and a time **range**
   `08:00 - 09:00` (`SHOOTING_DURATION = timedelta(hours=1)`). Asserting the end hour too means a
   wrong-cell click can't false-pass. `test_03_select_first_available_slot` passes against staging.
-- Still open on the booking flow: assert the destination URL (dynamic path, needs a regex like
-  `re.compile(r"/reservations/")` — confirm the real pattern first), and fill in + submit the
-  booking form (the suite currently stops at the slot click).
+- **The destination URL is asserted, and the pattern is confirmed against staging** (it is *not*
+  `/reservations/`, which was a guess):
+  `{base_url}/photographers/<slug>/private_offers/new?shooting_date=2026-10-03&shooting_time=08:00`.
+  `expect_slot_in_url(slot)` matches path **and** both query params, so the URL alone proves the app
+  received the cell that was clicked. `PATH_PATTERN` reuses `PhotographerProfilePage.PATH` instead of
+  spelling the slug a second time. No `$` anchor — the app may add params. `test_03` calls it
+  **before** `expect_available_slot()`: a wrong page then fails on the URL instead of burning
+  `DEFAULT_TIMEOUT_MS` on a missing element. Verified in both directions — a deliberately wrong
+  pattern fails on that exact line.
+- Still open on the booking flow: fill in + submit the booking form (the suite currently stops at
+  the slot click).
 - `LoginPage.expect_error` and `expect_still_on_login_page` exist but no test uses them — there is
   no invalid-credentials test yet.
 - `USE_CHROME_PROFILE` in `.env.example` is **dead** — no code reads it.
-- `TODO.md` tracks the live backlog (destination-URL assert, submitting the booking form, missing
-  invalid-login test, headless/CI). Keep it in sync when an item here is closed.
+- `TODO.md` tracks the live backlog (submitting the booking form, missing invalid-login test,
+  headless/CI). Keep it in sync when an item here is closed.
 
 ## Troubleshooting (learned the hard way)
 

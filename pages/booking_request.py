@@ -1,8 +1,9 @@
+import re
 from datetime import datetime, timedelta
 
 from playwright.sync_api import Page, expect
 
-from pages.photographer_profile import BookingSlot
+from pages.photographer_profile import BookingSlot, PhotographerProfilePage
 
 # Một buổi chụp mặc định dài 1 tiếng, nên trang đích hiển thị "giờ đã chọn - giờ đã chọn + 1h"
 SHOOTING_DURATION = timedelta(hours=1)
@@ -16,15 +17,32 @@ class BookingRequestPage:
     """Trang đích sau khi chọn một slot trống trên booking calendar.
     """
 
+    # Tới trang này bằng click từ calendar của chính photographer đó, nên path đích là
+    # Path trang profile + /private_offers/new
+    PATH_PATTERN = rf"{re.escape(PhotographerProfilePage.PATH)}/private_offers/new"
+
     def __init__(self, page: Page, base_url: str):
         self.page = page
         self.base_url = base_url
 
         self.selected_datetime = page.locator("//div[@id='app']//div[@class='shootingDateTimeControl__details']")
 
-    # --- kiểm tra (assertion) ---
+    # --- Assertion ---
     
-    def expect_slot(self, slot: BookingSlot):
+    def expect_selected_slot_in_url(self, slot: BookingSlot):
+        """Assert đã sang trang tạo private offer, đúng ngày/giờ của ô vừa bấm.
+
+        Ngày/giờ nằm ngay trong query string (`?shooting_date=2026-09-12&shooting_time=18:30`)
+        """
+        expect(self.page).to_have_url(
+            re.compile(
+                rf"^{re.escape(self.base_url)}{self.PATH_PATTERN}"
+                rf"\?shooting_date={slot.year}-{slot.month:02d}-{slot.day:02d}"
+                rf"&shooting_time={slot.time}"
+            )
+        )
+
+    def expect_available_slot(self, slot: BookingSlot):
         """Assert hiển thị đúng ngày/giờ vừa bấm ở calendar."""
         expect(self.selected_datetime).to_contain_text(
             f"{slot.year}/{slot.month:02d}/{slot.day:02d}"

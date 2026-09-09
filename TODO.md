@@ -8,17 +8,24 @@ Các việc còn tồn của bộ test. Cập nhật lần cuối: 2026-09-09.
 
 ### Booking
 
-- [ ] Assert URL của trang đích. Path là dynamic (tới đây bằng click, không bằng `goto`), nên
-      dùng regex: `expect(self.page).to_have_url(re.compile(r"/reservations/"))` — xác nhận
-      pattern thật trước.
 - [ ] Điền nốt form đặt lịch và submit (mới chỉ dừng ở bước chọn slot trên calendar).
+- [ ] Kiểm tra giá tiền cuối cùng trên trang đặt lịch, cả hai nhánh:
+      - **Không chọn option phụ** — tổng tiền = giá cơ bản của plan.
+      - **Có chọn option phụ** — tổng tiền = giá cơ bản + tổng giá các option đã tick, và
+        tổng phải cập nhật lại ngay khi tick/bỏ tick (tính lại ở client).
+      Tính kỳ vọng từ chính giá đọc trên trang (như `BookingSlot`), **không hardcode** con số —
+      giá plan/option trên staging đổi được. Cần confirm locator thật của khối tổng tiền +
+      danh sách option trước khi viết assert.
 
 ## II.PH
 
 ### Profile
 
-- [ ] `PATH = "/photographers/bebe"` đang hardcode một photographer trên staging. Chỉ tham số hóa
-      khi thật sự cần test nhiều photographer (YAGNI).
+- [ ] Chuyển `PATH` (hiện hardcode `"/photographers/takajun"` trong
+      `pages/photographer_profile.py`) sang đọc từ env, ví dụ `PHOTOGRAPHER_PATH` /
+      `PHOTOGRAPHER_SLUG`, có default là giá trị hiện tại để test không vỡ khi thiếu biến.
+      Thêm vào `.env.example` và mục *Environment variables* của `CLAUDE.md` + `README.md`.
+      Nhớ sửa cả comment "bebe" đã lệch với code.
 - [ ] Chưa có test cho trường hợp calendar **không có** slot trống nào —
       `select_first_available_slot()` raise `AssertionError`, cần quyết định đó có phải hành vi
       mong muốn không.
@@ -41,6 +48,24 @@ Các việc còn tồn của bộ test. Cập nhật lần cuối: 2026-09-09.
 
 
 ### DONE
+
+- [x] Assert URL trang đích sau khi bấm slot (`expect_slot_in_url()` trong
+      `pages/booking_request.py`). Pattern thật đã xác nhận trên staging — không phải
+      `/reservations/` như phỏng đoán cũ:
+      `{base_url}/photographers/<slug>/private_offers/new?shooting_date=2026-10-03&shooting_time=08:00`.
+      - Ngày/giờ của slot nằm ngay trong query string nên URL khẳng định được cả "đúng trang" lẫn
+        "app nhận đúng ô vừa bấm". Việc này **trùng** với `expect_available_slot()` (trang đích
+        render text ngày/giờ từ chính hai param này) — trùng có ý, đổi lại thông báo lỗi chỉ
+        đúng ngày/giờ sai thay vì `element(s) not found` sau 30s.
+      - Slug lấy từ `PhotographerProfilePage.PATH` (`PATH_PATTERN`), không hardcode lần thứ hai ⇒
+        đổi photographer chỉ sửa một chỗ, và assert bắt luôn trường hợp nhảy sang photographer khác.
+      - Không neo `$` ở cuối regex: app có thể thêm param mới.
+      - `test_03` gọi `expect_slot_in_url()` **trước** `expect_available_slot()`; thứ tự là
+        load-bearing.
+      Verify: `pytest` 5/5 pass. Kiểm cả nhánh phủ định — tạm đổi `PATH_PATTERN` thành
+      `private_offer_x` thì `test_03` fail đúng ở dòng `expect_slot_in_url()`, và URL actual in ra
+      xác nhận `:` trong `shooting_time=08:00` **không** bị percent-encode, thứ tự param là
+      `shooting_date` rồi `shooting_time`.
 
 - [x] Lưu session Google SSO một lần bằng `scripts/save_auth.py` → `.auth/storage_state.json`.
 - [x] Fixture `logged_in`: đăng nhập qua form một lần cho cả session, short-circuit nếu test đăng nhập chạy trước đã login rồi.
