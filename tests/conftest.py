@@ -129,3 +129,23 @@ def photographer_profile_page(
 @pytest.fixture(scope="session")
 def booking_request_page(page: Page, base_url: str) -> BookingRequestPage:
     return BookingRequestPage(page, base_url)
+
+
+# --- Test chạy nối tiếp trên cùng một tab: test sau bị skip nếu test trước fail ---
+# Đánh dấu bằng `pytestmark = pytest.mark.incremental` ở đầu file test.
+_failed_in_module: dict[str, str] = {}
+
+
+def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo[None]) -> None:
+    if "incremental" not in item.keywords:
+        return
+    if call.excinfo is not None and call.excinfo.typename != "Skipped":
+        _failed_in_module.setdefault(item.module.__name__, item.name)  # type: ignore[attr-defined]
+
+
+def pytest_runtest_setup(item: pytest.Item) -> None:
+    if "incremental" not in item.keywords:
+        return
+    failed = _failed_in_module.get(item.module.__name__)  # type: ignore[attr-defined]
+    if failed is not None:
+        pytest.skip(f"test trước đó đã fail: {failed}")

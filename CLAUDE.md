@@ -18,12 +18,13 @@ Run tests (PowerShell, from repo root):
 ```powershell
 .venv\Scripts\python.exe -m pytest                      # no activation needed
 .venv\Scripts\python.exe -m pytest --headed --slowmo 500
-.venv\Scripts\python.exe -m pytest tests/test_login.py::test_login_form_is_displayed
+.venv\Scripts\python.exe -m pytest tests/test_login.py::test_01_login_form_is_displayed
 .venv\Scripts\python.exe scripts\check.py               # static checks, no browser
 ```
 
 `pytest.ini`: `-v --browser chromium --screenshot only-on-failure --tracing retain-on-failure`,
-`testpaths = tests`, `pythonpath = .`.
+`testpaths = tests`, `pythonpath = .`, plus a `markers` entry registering `incremental` (see
+*Conventions* below).
 
 `scripts/check.py` runs the two static gates and exits non-zero if either fails:
 `pytest --setup-plan -q` (resolves every fixture without opening a browser — the only way to catch a
@@ -36,7 +37,7 @@ before a browser run — seconds instead of minutes.
 ```
 pages/login.py                       LoginPage: header ログイン link + email/password form
 pages/photographer_profile.py        PhotographerProfilePage + BookingSlot dataclass (calendar)
-pages/booking_request.py             BookingRequestPage (post-slot-click page, locators still TODO)
+pages/booking_request.py             BookingRequestPage (post-slot-click page; locators confirmed)
 tests/conftest.py                    dotenv, session fixtures, `logged_in` gate
 tests/test_login.py                  2 tests
 tests/test_photographer_profile.py   3 tests
@@ -95,11 +96,21 @@ clicking a calendar slot, so it always runs after an authenticated test.
 
 **Session-scoped fixtures, shared tab.** The whole run happens in **one tab**, and each test resumes
 wherever the previous one left the browser. Consequences:
-- Tests in a file run in **declaration order**, and order is load-bearing. Moving a test changes its
-  starting state. `test_has_available_date` and `test_selected_slot_is_shown_on_booking_page` both
-  rely on `test_calendar_is_displayed` having navigated first.
-- Running one test alone starts at `about:blank`, so order-dependent tests fail in isolation. Add
-  explicit navigation if a test must stand alone.
+- Tests in a file run in **declaration order**, and order is load-bearing — hence the `test_01_` /
+  `test_02_` / `test_03_` name prefixes. Moving a test changes its starting state.
+  `test_02_has_available_date` and `test_03_select_first_available_slot` both rely on
+  `test_01_booking_calendar_is_displayed` having navigated to the profile page first.
+- Running one test alone starts at `about:blank`, so order-dependent tests fail in isolation.
+  pytest never auto-runs the tests that precede it — only **fixtures** are a dependency graph.
+  To make a test stand alone, add explicit navigation, or move the precondition into a fixture.
+
+**The `incremental` marker.** `tests/conftest.py` implements the standard pytest recipe with two
+hooks (`pytest_runtest_makereport` + `pytest_runtest_setup`) keyed on a module-level
+`_failed_in_module` dict: once a test carrying the marker fails, every later test **in the same
+module** is skipped with `test trước đó đã fail: <name>` instead of failing in a confusing
+cascade. `Skipped` exceptions are filtered out, so the `credentials` skip does not arm it.
+`tests/test_photographer_profile.py` opts in via a module-level `pytestmark = pytest.mark.incremental`.
+This guards *within* a run only — it still does not let a test run in isolation.
 
 **Overridden `context`/`page` fixtures.** `conftest.py` overrides pytest-playwright's own
 `context`/`page` to inject the authenticated context. Side effect: the plugin's `new_context`
@@ -137,14 +148,19 @@ hardcoded.
 
 ## Current state / open items
 
-- **`pages/booking_request.py` is a stub.** `selected_datetime` is a placeholder XPath
-  (`//*[contains(@class,'selectedDateTime')]`) and `expect_slot` guesses the Japanese format
-  (`2026年9月10日` plus `09:00` inside one element). Replace both with real values from DevTools —
-  `test_selected_slot_is_shown_on_booking_page` cannot pass until then.
+- **`pages/booking_request.py` is done and verified green.** `selected_datetime` is
+  `//div[@id='app']//div[@class='shootingDateTimeControl__details']`, and `expect_slot` asserts the
+  real format in two `to_contain_text` calls: a zero-padded date `2026/09/16` and a time **range**
+  `08:00 - 09:00` (`SHOOTING_DURATION = timedelta(hours=1)`). Asserting the end hour too means a
+  wrong-cell click can't false-pass. `test_03_select_first_available_slot` passes against staging.
+- Still open on the booking flow: assert the destination URL (dynamic path, needs a regex like
+  `re.compile(r"/reservations/")` — confirm the real pattern first), and fill in + submit the
+  booking form (the suite currently stops at the slot click).
 - `LoginPage.expect_error` and `expect_still_on_login_page` exist but no test uses them — there is
   no invalid-credentials test yet.
 - `USE_CHROME_PROFILE` in `.env.example` is **dead** — no code reads it.
-- `TODO.md` tracks the live backlog (booking stub, missing invalid-login test, headless/CI). Keep it in sync when an item here is closed.
+- `TODO.md` tracks the live backlog (destination-URL assert, submitting the booking form, missing
+  invalid-login test, headless/CI). Keep it in sync when an item here is closed.
 
 ## Troubleshooting (learned the hard way)
 

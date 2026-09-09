@@ -1,24 +1,16 @@
 # TODO
 
-Các việc còn tồn của bộ test. Cập nhật lần cuối: 2026-09-08.
+Các việc còn tồn của bộ test. Cập nhật lần cuối: 2026-09-09.
 
 ## I.USER
 
 ### Login
-
-- [ ] Chưa có test đăng nhập sai. `LoginPage.expect_error` và `expect_still_on_login_page` đã viết
-      xong nhưng **chưa test nào dùng** — thêm `test_login_with_invalid_credentials`.
 
 - [ ] `is_logged_in()` suy ra trạng thái từ việc login link ログイン còn hiện hay không. Đủ dùng, nhưng
       nếu header đổi thì test sẽ sai âm thầm — cân nhắc neo vào một element chỉ có khi đã đăng nhập.
 
 ### Booking
 
-- [ ] **`pages/booking_request.py` mới chỉ là stub.** Locator `selected_datetime`
-      (`//*[contains(@class,'selectedDateTime')]`) là placeholder, và `expect_slot` đang *đoán*
-      format tiếng Nhật (`2026年9月10日` + `09:00` nằm chung một element). Lấy XPath và format
-      thật từ DevTools trên trang đích.
-      → `test_selected_slot_is_shown_on_booking_page` **không thể pass** cho tới khi xong việc này.
 - [ ] Assert URL của trang đích. Path là dynamic (tới đây bằng click, không bằng `goto`), nên
       dùng regex: `expect(self.page).to_have_url(re.compile(r"/reservations/"))` — xác nhận
       pattern thật trước.
@@ -43,9 +35,10 @@ Các việc còn tồn của bộ test. Cập nhật lần cuối: 2026-09-08.
       Đang chấp nhận đánh đổi; nếu cần artifact thì phải tự gọi `context.tracing.start/stop`.
 - [ ] `USE_CHROME_PROFILE` trong `.env.example` là **biến chết** — không có code nào đọc. Xóa đi
       hoặc implement nhánh dùng persistent profile.
-- [ ] Fixture đều `scope="session"` ⇒ chạy chung một tab, thứ tự test là load-bearing. Chưa có
-      cách chạy độc lập một test bất kỳ. Nếu sau này thấy vướng thì thêm bước điều hướng tường
-      minh ở đầu mỗi test.
+- [ ] Fixture đều `scope="session"` ⇒ chạy chung một tab, thứ tự test là load-bearing. Marker
+      `incremental` đã chặn test sau chạy khi test trước fail, nhưng **chạy độc lập một test
+      vẫn không được** (pytest không tự chạy test đứng trước). Nếu cần, chuyển precondition
+      (`goto_profile_page` + `expect_calendar_loaded`) vào một fixture `calendar_ready`.
 - [ ] Chưa chạy được headless / trên CI (`headless=False` hardcode trong `conftest.py`, và luồng
       Google SSO cần thao tác tay). Chỉ làm khi thật sự cần CI.
 
@@ -60,3 +53,14 @@ Các việc còn tồn của bộ test. Cập nhật lần cuối: 2026-09-08.
       `playwright install`, thêm `scripts/check.py` + `DEFAULT_TIMEOUT_MS`, xoá mục "Ghi chú dọn
       dẹp" đã sai).
 - [x] Đọc ngày/giờ của slot từ chính ô được bấm (`BookingSlot`) thay vì hardcode ngày.
+- [x] `pages/booking_request.py` hết là stub: locator thật
+      (`//div[@id='app']//div[@class='shootingDateTimeControl__details']`) và `expect_slot` khớp
+      format thật của trang đích — ngày `2026/09/16` (zero-pad) và khoảng giờ `08:00 - 09:00`
+      (giờ đã chọn + 1 tiếng). Assert cả giờ bắt đầu lẫn kết thúc nên không false-pass khi
+      click sai ô.
+- [x] `test_03_select_first_available_slot` chạy pass trên browser thật: locator
+      `shootingDateTimeControl__details` và giả định `SHOOTING_DURATION = 1h` đã được xác nhận,
+      không còn là suy đoán.
+- [x] Marker `incremental` (hook trong `tests/conftest.py` + đăng ký trong `pytest.ini`):
+      test sau tự skip kèm lý do khi test trước trong cùng file fail, thay vì fail dây chuyền
+      với lỗi khó đọc. Bật cho `tests/test_photographer_profile.py` bằng `pytestmark`.
