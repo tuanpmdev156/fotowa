@@ -77,6 +77,12 @@ win over the file.
   skip cascades through `logged_in` to everything downstream.
 - `DEFAULT_TIMEOUT_MS` (30000) — applied in the `page` fixture to action, navigation **and**
   `expect` assertion timeouts (`expect` defaults to 5s and is not affected by the other two).
+- `PHOTOGRAPHER_NAME` (`bebe`) — which staging photographer the calendar/booking tests use. The
+  `photographer_path` fixture turns it into `/photographers/<slug>`, shared by
+  `PhotographerProfilePage` (to `goto`) and `BookingRequestPage` (to assert the destination URL).
+  **The read must stay in `conftest.py`**, not in a page-object class body: `conftest` imports
+  `pages.*` *before* it calls `load_dotenv()`, so an `os.getenv` in a class body would never see
+  `.env` — only a real shell variable — and would silently fall back to the default.
 - `AUTH_DIR` (`.auth`), `AUTH_STATE` (`.auth/storage_state.json`),
   `AUTOMATION_PROFILE_DIR` (`.auth/chrome-profile`), `GOOGLE_SSO_LOGIN_TIMEOUT_MS` (300000).
 
@@ -86,7 +92,8 @@ win over the file.
 base_url → playwright_instance → browser_context → context → page
                                                                ↓
         login_page ──→ credentials ──→ logged_in ──→ photographer_profile_page
-                                                     booking_request_page (no logged_in dep)
+                                     photographer_path ──↗     booking_request_page
+                                                               (no logged_in dep)
 ```
 
 `booking_request_page` deliberately does **not** depend on `logged_in`: that page is only reached by
@@ -145,7 +152,9 @@ for it, because one method cannot serve both roles:
 
 ## The booking calendar (the tricky page object)
 
-`PhotographerProfilePage` is pinned to one staging photographer: `PATH = "/photographers/takajun"`.
+`PhotographerProfilePage` takes the profile `path` as a constructor argument, from the
+`photographer_path` fixture (`PHOTOGRAPHER_NAME`, default `bebe`) — the page object hardcodes no
+photographer.
 
 Calendar `td`s carry **no date or time data** — an `available` cell contains only an icon. Both are
 derived from position:
@@ -178,9 +187,9 @@ hardcoded.
 - **The destination URL is asserted, and the pattern is confirmed against staging** (it is *not*
   `/reservations/`, which was a guess):
   `{base_url}/photographers/<slug>/private_offers/new?shooting_date=2026-10-03&shooting_time=08:00`.
-  `expect_slot_in_url(slot)` matches path **and** both query params, so the URL alone proves the app
-  received the cell that was clicked. `PATH_PATTERN` reuses `PhotographerProfilePage.PATH` instead of
-  spelling the slug a second time. No `$` anchor — the app may add params. `test_03` calls it
+  `expect_selected_slot_in_url(slot)` matches path **and** both query params, so the URL alone proves the app
+  received the cell that was clicked. `self.path_pattern` is built from the same `photographer_path` fixture, so the
+  slug is spelled once for the whole suite. No `$` anchor — the app may add params. `test_03` calls it
   **before** `expect_available_slot()`: a wrong page then fails on the URL instead of burning
   `DEFAULT_TIMEOUT_MS` on a missing element. Verified in both directions — a deliberately wrong
   pattern fails on that exact line.

@@ -19,18 +19,15 @@ class PhotographerProfilePage:
     Trang chi tiết photographer
     """
 
-    # "bebe" là photographer cố định trên staging - khi nào cần test nhiều photographer thì mới đổi thành tham số.
-    PATH = "/photographers/takajun"
-
-    # Calendar chỉ hiện 7 ngày. 
-    # Khi kín lịch bấm 次週 để tìm lịcg trống, tối đa MAX_WEEKS lần. 
-    # Nếu vẫn kín lịch thì fail.
+    # Calendar chỉ hiện 7 ngày.
+    # Khi kín lịch bấm 次週 để tìm lịch trống, tối đa MAX_WEEKS lần,nếu vẫn kín lịch sau đó thì fail.
     
     MAX_WEEKS = 10
 
-    def __init__(self, page: Page, base_url: str):
+    def __init__(self, page: Page, base_url: str, photographer_path: str):
         self.page = page
         self.base_url = base_url
+        self.photographer_path = photographer_path
 
         self.calendar = page.locator(
             "//div[@class='calendar']//table[@class='calendar__timeContainer']"
@@ -52,7 +49,7 @@ class PhotographerProfilePage:
     # --- Navigation ---
 
     def goto_profile_page(self):
-        self.page.goto(f"{self.base_url}{self.PATH}")
+        self.page.goto(f"{self.base_url}{self.photographer_path}")
 
     # Javascript function kiểm tra ngày đầu tiên trong tuần đã thay đổi hay chưa, so với giá trị cũ.
     _FIRST_DAY_CHANGED = """old =>

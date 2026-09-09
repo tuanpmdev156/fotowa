@@ -8,7 +8,6 @@ Các việc còn tồn của bộ test. Cập nhật lần cuối: 2026-09-09.
 
 ### Booking
 
-- [ ] Điền nốt form đặt lịch và submit (mới chỉ dừng ở bước chọn slot trên calendar).
 - [ ] Kiểm tra giá tiền cuối cùng trên trang đặt lịch, cả hai nhánh:
       - **Không chọn option phụ** — tổng tiền = giá cơ bản của plan.
       - **Có chọn option phụ** — tổng tiền = giá cơ bản + tổng giá các option đã tick, và
@@ -16,16 +15,12 @@ Các việc còn tồn của bộ test. Cập nhật lần cuối: 2026-09-09.
       Tính kỳ vọng từ chính giá đọc trên trang (như `BookingSlot`), **không hardcode** con số —
       giá plan/option trên staging đổi được. Cần confirm locator thật của khối tổng tiền +
       danh sách option trước khi viết assert.
+- [ ] Điền nốt form đặt lịch và submit (mới chỉ dừng ở bước chọn slot trên calendar).
 
 ## II.PH
 
 ### Profile
 
-- [ ] Chuyển `PATH` (hiện hardcode `"/photographers/takajun"` trong
-      `pages/photographer_profile.py`) sang đọc từ env, ví dụ `PHOTOGRAPHER_PATH` /
-      `PHOTOGRAPHER_SLUG`, có default là giá trị hiện tại để test không vỡ khi thiếu biến.
-      Thêm vào `.env.example` và mục *Environment variables* của `CLAUDE.md` + `README.md`.
-      Nhớ sửa cả comment "bebe" đã lệch với code.
 - [ ] Chưa có test cho trường hợp calendar **không có** slot trống nào —
       `select_first_available_slot()` raise `AssertionError`, cần quyết định đó có phải hành vi
       mong muốn không.
@@ -49,7 +44,23 @@ Các việc còn tồn của bộ test. Cập nhật lần cuối: 2026-09-09.
 
 ### DONE
 
-- [x] Assert URL trang đích sau khi bấm slot (`expect_slot_in_url()` trong
+- [x] Bỏ hardcode photographer trong `pages/photographer_profile.py`. Giờ đọc từ env
+      `PHOTOGRAPHER_NAME` (default `bebe`, thiếu biến thì test vẫn chạy như cũ); fixture
+      `photographer_path` dựng ra `/photographers/<slug>` và truyền vào **cả**
+      `PhotographerProfilePage` (để `goto`) lẫn `BookingRequestPage` (để assert URL trang private
+      offer) ⇒ slug chỉ viết một lần cho cả suite. `PATH`/`PATH_PATTERN` ở cấp class bị bỏ, thay
+      bằng `self.path` / `self.path_pattern`.
+      - **Env phải đọc trong `conftest.py`, không đọc trong thân class của page object.**
+        `conftest` `import pages...` **trước** khi gọi `load_dotenv()`, nên `os.getenv` trong thân
+        class chạy lúc `.env` chưa được nạp — nó chỉ thấy biến set sẵn trong shell và âm thầm rơi
+        về default. Đây là lý do `PHOTOGRAPHER_NAME` nằm cạnh `DEFAULT_TIMEOUT_MS` chứ không nằm
+        trong page object.
+      - Constant `PATH` cấp class (và comment đi kèm đã lệch với code) bị xoá.
+      Verify: `pytest` 5/5 pass với default. Override thật cũng đã kiểm —
+      `PHOTOGRAPHER_NAME=zzz-no-such-photographer pytest ...::test_01` fail vì trang trả về error
+      page của Rails, chứng minh biến env thật sự đi vào URL chứ không bị bỏ qua.
+
+- [x] Assert URL trang đích sau khi bấm slot (`expect_selected_slot_in_url()` trong
       `pages/booking_request.py`). Pattern thật đã xác nhận trên staging — không phải
       `/reservations/` như phỏng đoán cũ:
       `{base_url}/photographers/<slug>/private_offers/new?shooting_date=2026-10-03&shooting_time=08:00`.
@@ -57,13 +68,14 @@ Các việc còn tồn của bộ test. Cập nhật lần cuối: 2026-09-09.
         "app nhận đúng ô vừa bấm". Việc này **trùng** với `expect_available_slot()` (trang đích
         render text ngày/giờ từ chính hai param này) — trùng có ý, đổi lại thông báo lỗi chỉ
         đúng ngày/giờ sai thay vì `element(s) not found` sau 30s.
-      - Slug lấy từ `PhotographerProfilePage.PATH` (`PATH_PATTERN`), không hardcode lần thứ hai ⇒
-        đổi photographer chỉ sửa một chỗ, và assert bắt luôn trường hợp nhảy sang photographer khác.
+      - Path lấy từ fixture `photographer_path` (`self.path_pattern`), không hardcode slug lần
+        thứ hai ⇒ đổi photographer chỉ sửa một chỗ, và assert bắt luôn trường hợp nhảy sang
+        photographer khác.
       - Không neo `$` ở cuối regex: app có thể thêm param mới.
-      - `test_03` gọi `expect_slot_in_url()` **trước** `expect_available_slot()`; thứ tự là
+      - `test_03` gọi `expect_selected_slot_in_url()` **trước** `expect_available_slot()`; thứ tự là
         load-bearing.
-      Verify: `pytest` 5/5 pass. Kiểm cả nhánh phủ định — tạm đổi `PATH_PATTERN` thành
-      `private_offer_x` thì `test_03` fail đúng ở dòng `expect_slot_in_url()`, và URL actual in ra
+      Verify: `pytest` 5/5 pass. Kiểm cả nhánh phủ định — tạm đổi `path_pattern` thành
+      `private_offer_x` thì `test_03` fail đúng ở dòng `expect_selected_slot_in_url()`, và URL actual in ra
       xác nhận `:` trong `shooting_time=08:00` **không** bị percent-encode, thứ tự param là
       `shooting_date` rồi `shooting_time`.
 

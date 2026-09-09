@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 
 from playwright.sync_api import Page, expect
 
-from pages.photographer_profile import BookingSlot, PhotographerProfilePage
+from pages.photographer_profile import BookingSlot
 
 # Một buổi chụp mặc định dài 1 tiếng, nên trang đích hiển thị "giờ đã chọn - giờ đã chọn + 1h"
 SHOOTING_DURATION = timedelta(hours=1)
@@ -17,13 +17,10 @@ class BookingRequestPage:
     """Trang đích sau khi chọn một slot trống trên booking calendar.
     """
 
-    # Tới trang này bằng click từ calendar của chính photographer đó, nên path đích là
-    # Path trang profile + /private_offers/new
-    PATH_PATTERN = rf"{re.escape(PhotographerProfilePage.PATH)}/private_offers/new"
-
-    def __init__(self, page: Page, base_url: str):
+    def __init__(self, page: Page, base_url: str, photographer_path: str):
         self.page = page
         self.base_url = base_url
+        self.path_pattern = rf"{re.escape(photographer_path)}/private_offers/new"
 
         self.selected_datetime = page.locator("//div[@id='app']//div[@class='shootingDateTimeControl__details']")
 
@@ -36,7 +33,7 @@ class BookingRequestPage:
         """
         expect(self.page).to_have_url(
             re.compile(
-                rf"^{re.escape(self.base_url)}{self.PATH_PATTERN}"
+                rf"^{re.escape(self.base_url)}{self.path_pattern}"
                 rf"\?shooting_date={slot.year}-{slot.month:02d}-{slot.day:02d}"
                 rf"&shooting_time={slot.time}"
             )

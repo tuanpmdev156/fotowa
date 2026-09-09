@@ -26,6 +26,9 @@ load_dotenv(ROOT / ".env")
 # Timeout mặc định cho mọi action/navigation/assertion, đặt một chỗ duy nhất ở fixture `page` bên dưới. 
 DEFAULT_TIMEOUT_MS = int(os.getenv("DEFAULT_TIMEOUT_MS", 30000))
 
+# Photographer dùng cho test calendar/booking. Default là photographer "bebe" 
+PHOTOGRAPHER_NAME = os.getenv("PHOTOGRAPHER_NAME", "bebe")
+
 AUTH_DIR = Path(os.getenv("AUTH_DIR", ROOT / ".auth"))
 AUTH_STATE = Path(os.getenv("AUTH_STATE", AUTH_DIR / "storage_state.json"))
 
@@ -46,10 +49,6 @@ def playwright_instance() -> Iterator[Playwright]:
     with sync_playwright() as p:
         yield p
 
-
-# Muốn browser dừng lại và KHÔNG đóng khi có lỗi: chạy `pytest --pdb`. pytest hoãn
-# teardown của fixture cho tới lúc bạn thoát debugger, nên cửa sổ Chrome vẫn sống và
-# giữ nguyên state ở thời điểm fail.
 @pytest.fixture(scope="session")
 def browser_context(playwright_instance: Playwright) -> Iterator[BrowserContext]:
     p = playwright_instance
@@ -103,10 +102,8 @@ def logged_in(login_page: LoginPage, credentials: tuple[str, str]) -> None:
     """Đảm bảo đã đăng nhập app fotowa trước khi truy cập các trang khác.
 
     Fixture này đăng nhập qua form một lần cho cả session. Nếu test đăng nhập chạy
-    trước đã login rồi thì `is_logged_in()` ngắn mạch, không làm lại.
+    trước đã login rồi thì không làm lại.
 
-    Chỉ assert `expect_logged_in()` (trạng thái bền) chứ không `expect_login_success()`:
-    thông báo thành công chỉ hiện một lần, kiểm nó là việc của test login.
     """
     login_page.goto_home_page()
     if login_page.is_logged_in():
@@ -118,18 +115,27 @@ def logged_in(login_page: LoginPage, credentials: tuple[str, str]) -> None:
     login_page.expect_logged_in()
 
 
+@pytest.fixture(scope="session")
+def photographer_path() -> str:
+    """Path trang profile của photographer
+    """
+    return f"/photographers/{PHOTOGRAPHER_NAME}"
+
+
 # Phụ thuộc `logged_in` state: page object chỉ được tạo sau khi đăng nhập xong.
 @pytest.fixture(scope="session")
 def photographer_profile_page(
-    page: Page, base_url: str, logged_in: None
+    page: Page, base_url: str, photographer_path: str, logged_in: None
 ) -> PhotographerProfilePage:
-    return PhotographerProfilePage(page, base_url)
+    return PhotographerProfilePage(page, base_url, photographer_path)
 
 
 # Không cần `logged_in`: ta tới trang này bằng click từ calendar, luôn chạy sau khi đã đăng nhập.
 @pytest.fixture(scope="session")
-def booking_request_page(page: Page, base_url: str) -> BookingRequestPage:
-    return BookingRequestPage(page, base_url)
+def booking_request_page(
+    page: Page, base_url: str, photographer_path: str
+) -> BookingRequestPage:
+    return BookingRequestPage(page, base_url, photographer_path)
 
 
 # --- Test chạy nối tiếp trên cùng một tab: test sau bị skip nếu test trước fail ---

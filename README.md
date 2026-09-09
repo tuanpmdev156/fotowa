@@ -22,10 +22,16 @@ trang đăng nhập.
 Copy `.env.example` thành `.env` rồi điền giá trị của bạn. `.env` đã được gitignore — tuyệt đối
 không commit file này.
 
+Bắt buộc phải điền `BASE_URL`, `TEST_EMAIL`, `TEST_PASSWORD`. Các biến còn lại đều có default
+trong code, thiếu cũng không vỡ — đáng chú ý nhất là `PHOTOGRAPHER_NAME` (default `bebe`), quyết
+định test calendar/booking chạy trên photographer nào của staging. Đổi biến này khi photographer
+mặc định kín lịch hoặc bị xoá.
+
 Biến set sẵn trong shell sẽ thắng `.env`, dùng để ghi đè tạm cho một lần chạy:
 
 ```powershell
 $env:BASE_URL = "https://moi-truong-khac.fotowa.com"
+$env:PHOTOGRAPHER_NAME = "takajun"
 ```
 
 ---
