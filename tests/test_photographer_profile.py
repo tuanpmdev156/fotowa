@@ -12,7 +12,7 @@ def test_01_booking_calendar_is_displayed(photographer_profile_page: Photographe
     photographer_profile_page.expect_calendar_loaded()
 
 
-def test_02_has_available_date(photographer_profile_page: PhotographerProfilePage):
+def test_02_booking_calendar_has_available_date(photographer_profile_page: PhotographerProfilePage):
     photographer_profile_page.expect_has_available_date()
 
 

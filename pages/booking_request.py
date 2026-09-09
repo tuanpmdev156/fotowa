@@ -25,9 +25,9 @@ class BookingRequestPage:
         self.selected_datetime = page.locator("//div[@id='app']//div[@class='shootingDateTimeControl__details']")
 
     # --- kiểm tra (assertion) ---
-
+    
     def expect_slot(self, slot: BookingSlot):
-        """Assert trang đích hiển thị đúng ngày/giờ vừa bấm ở calendar."""
+        """Assert hiển thị đúng ngày/giờ vừa bấm ở calendar."""
         expect(self.selected_datetime).to_contain_text(
             f"{slot.year}/{slot.month:02d}/{slot.day:02d}"
         )
