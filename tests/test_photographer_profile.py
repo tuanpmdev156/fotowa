@@ -21,5 +21,5 @@ def test_03_select_first_available_slot(
     booking_request_page: BookingRequestPage,
 ):
     # Đọc ngày/giờ từ ô được chọn
-    slot = photographer_profile_page.select_first_available_slot()
-    booking_request_page.expect_slot(slot)
+    available_slot = photographer_profile_page.select_first_available_slot()
+    booking_request_page.expect_slot(available_slot)

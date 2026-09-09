@@ -45,7 +45,7 @@ scripts/save_auth.py                 One-time manual Google SSO -> .auth/storage
 scripts/check.py                     --setup-plan + pyright in one command
 pyrightconfig.json                   Type-check config
 .env.example                         Committed template; .env and .auth/ are gitignored
-booking_calendar.html                Untracked scratch: saved DOM of the calendar, for writing XPath
+fixtures/booking_calendar.html       Committed: saved DOM of the calendar, for writing XPath offline
 ```
 
 ## Auth model (the central constraint)
@@ -139,7 +139,16 @@ derived from position:
 - **hour** = the cell's row index → look up `table.time` at the same index
 - **day** = which `table.events` the cell is in (one table per day, 7 columns) → look up
   `tr.dayname` at the same index
-- **year/month** = `tr.month` in `table.calendar__header`, formatted `"2026/09"`
+- **year/month** = `tr.month` in `table.calendar__header`, formatted `"2026/09"` — but a week
+  straddling two months renders **two** `th[@colspan]` (`colspan=3` "2026/09" + `colspan=4`
+  "2026/10"), so `_read_year_month(column)` walks the colspans instead of reading one value
+
+`goto_week_with_available_date()` clicks 次週 (`//li[@class='next']/a`) up to `MAX_WEEKS = 4`
+times until the visible week has an `available` cell — staging is often fully booked and that
+is data, not a bug. It uses `.count()`, not `expect(...).not_to_have_count(0)`, so a booked week
+costs one call instead of a full `DEFAULT_TIMEOUT_MS`. The render gate after each click is
+`page.wait_for_function` (the day cell must exist **and** differ): `not_to_have_text` passes the
+instant Vue detaches the `td` mid-rerender, which returns before the new week is painted.
 
 `select_first_available_slot()` walks the columns, pulls every cell's `className` in one
 `evaluate_all` (not one round-trip per cell), clicks the first `available` one, and returns a frozen

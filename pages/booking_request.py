@@ -4,8 +4,7 @@ from playwright.sync_api import Page, expect
 
 from pages.photographer_profile import BookingSlot
 
-# Một buổi chụp mặc định dài 1 tiếng, nên trang đích hiển thị
-# "giờ đã chọn - giờ đã chọn + 1h"
+# Một buổi chụp mặc định dài 1 tiếng, nên trang đích hiển thị "giờ đã chọn - giờ đã chọn + 1h"
 SHOOTING_DURATION = timedelta(hours=1)
 
 
@@ -14,8 +13,7 @@ def _plus_one_hour(hhmm: str) -> str:
 
 
 class BookingRequestPage:
-    """
-    Trang đích sau khi chọn một ô trống trên booking calendar.
+    """Trang đích sau khi chọn một slot trống trên booking calendar.
     """
 
     def __init__(self, page: Page, base_url: str):

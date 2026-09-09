@@ -64,3 +64,16 @@ Các việc còn tồn của bộ test. Cập nhật lần cuối: 2026-09-09.
 - [x] Marker `incremental` (hook trong `tests/conftest.py` + đăng ký trong `pytest.ini`):
       test sau tự skip kèm lý do khi test trước trong cùng file fail, thay vì fail dây chuyền
       với lỗi khó đọc. Bật cho `tests/test_photographer_profile.py` bằng `pytestmark`.
+- [x] Calendar tự bấm 次週 tìm tuần có slot trống (`goto_next_week()` +
+      `goto_week_with_available_date()`, `MAX_WEEKS = 4`), locator `//li[@class='next']/a`.
+      Hai chỗ suýt sai đã sửa và verify trên staging:
+      - Gate chờ render **không** dùng được `expect(...).not_to_have_text(...)`: lúc Vue render
+        lại, `td` biến mất trong chốc lát và assert phủ định coi "không có element" là thoả nên
+        pass sớm, đọc ngay sau đó vẫn ra tuần cũ. Thay bằng `page.wait_for_function` đòi ô ngày
+        đầu vừa tồn tại vừa khác giá trị cũ (`_FIRST_DAY_CHANGED`, viết gọn bằng
+        `?.innerText.trim() ?? old` để `td` chưa render bị coi là "chưa đổi").
+      - Tuần vắt qua hai tháng có **hai** `th[@colspan]` (`colspan=3` "2026/09" + `colspan=4`
+        "2026/10") ⇒ `_read_year_month()` cũ vỡ vì strict mode, và nếu không vỡ cũng gán sai
+        tháng cho 4 cột cuối. Giờ nhận `column` và cộng dồn colspan để tra đúng ô.
+      Verify: tuần đầu 0 slot → bấm 3 lần → chọn ô 2026/10/03 08:00, trang booking khớp.
+      Chạy lại pass sau khi rút gọn `_FIRST_DAY_CHANGED`.

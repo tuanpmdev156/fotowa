@@ -15,17 +15,18 @@ class BookingSlot:
 
 
 class PhotographerProfilePage:
-    """Trang chi tiết photographer - phần calendar đặt lịch.
-
-    Calendar không lưu ngày/giờ trong `td`: ô `available` chỉ chứa icon. Ngày/giờ
-    suy ra từ vị trí:
-      - giờ  = index hàng của ô  -> tra `table.time` ở cùng index
-      - ngày = ô thuộc `table.events` thứ mấy (0-6) -> tra `tr.dayname` ở cùng index
-      - năm/tháng = `tr.month` trong `table.calendar__header` ("2026/09")
+    """
+    Trang chi tiết photographer
     """
 
     # "bebe" là photographer cố định trên staging - khi nào cần test nhiều photographer thì mới đổi thành tham số.
-    PATH = "/photographers/bebe"
+    PATH = "/photographers/takajun"
+
+    # Calendar chỉ hiện 7 ngày. 
+    # Khi kín lịch bấm 次週 để tìm lịcg trống, tối đa MAX_WEEKS lần. 
+    # Nếu vẫn kín lịch thì fail.
+    
+    MAX_WEEKS = 10
 
     def __init__(self, page: Page, base_url: str):
         self.page = page
@@ -34,29 +35,56 @@ class PhotographerProfilePage:
         self.calendar = page.locator(
             "//div[@class='calendar']//table[@class='calendar__timeContainer']"
         )
+        self.next_week_link = page.locator("//li[@class='next']/a[text()='次週']")
 
+        self.booking_table_header = page.locator("//table[@class='calendar__header']")
+        # Table cho mỗi tuần (7 cột, 24 hàng).
+        self.booking_table = self.calendar.locator("xpath=.//table[@class='events']")
+        self.current_year_moth = self.booking_table_header.locator("xpath=.//tr[@class='month']/th[@colspan]")
+        # Cột ngày
+        self.day_headers = self.booking_table_header.locator("xpath=.//tr[@class='dayname']/td")
+         # Cột giờ
+        self.time_slots = self.calendar.locator("xpath=.//table[@class='time']//td")
         self.available_dates = self.calendar.locator("xpath=.//td[@class='available']")
 
-        # Một `table.events` cho mỗi ngày (7 cột), mỗi bảng 24 hàng.
-        self.day_tables = self.calendar.locator("xpath=.//table[@class='events']")
-        # Cột giờ bên trái, cùng số hàng với mỗi `table.events`.
-        self.time_slots = self.calendar.locator("xpath=.//table[@class='time']//td")
+        
 
-        self.header = page.locator("//table[@class='calendar__header']")
-        self.year_month = self.header.locator("xpath=.//tr[@class='month']/th[@colspan]")
-        self.day_headers = self.header.locator("xpath=.//tr[@class='dayname']/td")
-
-    # --- điều hướng ---
+    # --- Navigation ---
 
     def goto_profile_page(self):
         self.page.goto(f"{self.base_url}{self.PATH}")
 
-    # --- hành động ---
+    # Javascript function kiểm tra ngày đầu tiên trong tuần đã thay đổi hay chưa, so với giá trị cũ.
+    _FIRST_DAY_CHANGED = """old =>
+        (document.querySelector("table.calendar__header tr.dayname td")
+            ?.innerText.trim() ?? old) !== old"""
+
+    def goto_next_week(self):
+        """Bấm next và chờ calendar render xong tuần mới."""
+        first_day_in_week = self.day_headers.first.inner_text().strip()
+        self.next_week_link.click()
+        self.page.wait_for_function(self._FIRST_DAY_CHANGED, arg=first_day_in_week)
+
+    def goto_week_with_available_date(self):
+        """Bấm sang tuần kế tiếp cho tới khi calendar có ít nhất một slot trống.
+        Nếu sau MAX_WEEKS lần bấm vẫn không có slot trống thì fail.
+        """
+        for clicked in range(self.MAX_WEEKS + 1):
+            if self.available_dates.count() > 0:
+                return
+            if clicked < self.MAX_WEEKS:
+                self.goto_next_week()
+
+        raise AssertionError(
+            f"No available slot after clicking {self.MAX_WEEKS} week times"
+        )
+
+    # --- Actions ---
 
     def select_first_available_slot(self) -> BookingSlot:
-        """Click ô trống đầu tiên, trả về ngày/giờ của chính ô đó."""
-        for column in range(self.day_tables.count()):
-            cells = self.day_tables.nth(column).locator("xpath=.//tr/td")
+        """Click slot trống đầu tiên, trả về ngày/giờ của chính ô đó."""
+        for column in range(self.booking_table.count()):
+            cells = self.booking_table.nth(column).locator("xpath=.//tr/td")
             # Lấy class của cả cột trong một lần gọi thay vì hỏi từng ô.
             classes: list[str] = cells.evaluate_all("els => els.map(e => e.className)")
             for row, css in enumerate(classes):
@@ -67,10 +95,10 @@ class PhotographerProfilePage:
 
         raise AssertionError("No available slot in the calendar")
 
-    # --- đọc dữ liệu ---
+    # --- Private Methods ---
 
     def _read_slot(self, column: int, row: int) -> BookingSlot:
-        year, month = self._read_year_month()
+        year, month = self._read_year_month(column)
         day = self.day_headers.nth(column).locator("xpath=./span").inner_text()
         return BookingSlot(
             year=year,
@@ -79,17 +107,27 @@ class PhotographerProfilePage:
             time=self.time_slots.nth(row).inner_text().strip(),
         )
 
-    def _read_year_month(self) -> tuple[int, int]:
-        # `<th colspan="7"><span>2026</span>/09</th>` -> "2026/09"
-        year, month = self.year_month.inner_text().strip().split("/")
-        return int(year), int(month)
+    def _read_year_month(self, column: int) -> tuple[int, int]:
+        """Năm/tháng của tuầnđang hiển thị.
+        """
+        cells: list[tuple[int, str]] = self.current_year_moth.evaluate_all(
+            "els => els.map(e => [e.colSpan, e.innerText.trim()])"
+        )
+        cursor = 0
+        for span, text in cells:
+            cursor += span
+            if column < cursor:
+                year, month = text.split("/")
+                return int(year), int(month)
 
-    # --- kiểm tra (assertion) ---
+        raise AssertionError(f"Column {column} is outside the booking calendar")
+
+    # --- Assertion ---
 
     def expect_calendar_loaded(self):
-        # `expect` tự retry tới DEFAULT_TIMEOUT_MS, không cần chờ load state.
         expect(self.calendar).to_be_visible()
 
     def expect_has_available_date(self):
-        # `not_to_have_count(0)` retry tới DEFAULT_TIMEOUT_MS
+        # Tìm tuần có slot trống trước, rồi mới assert
+        self.goto_week_with_available_date()
         expect(self.available_dates).not_to_have_count(0)
