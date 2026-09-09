@@ -6,9 +6,6 @@ Các việc còn tồn của bộ test. Cập nhật lần cuối: 2026-09-09.
 
 ### Login
 
-- [ ] `is_logged_in()` suy ra trạng thái từ việc login link ログイン còn hiện hay không. Đủ dùng, nhưng
-      nếu header đổi thì test sẽ sai âm thầm — cân nhắc neo vào một element chỉ có khi đã đăng nhập.
-
 ### Booking
 
 - [ ] Assert URL của trang đích. Path là dynamic (tới đây bằng click, không bằng `goto`), nên
@@ -47,6 +44,22 @@ Các việc còn tồn của bộ test. Cập nhật lần cuối: 2026-09-09.
 
 - [x] Lưu session Google SSO một lần bằng `scripts/save_auth.py` → `.auth/storage_state.json`.
 - [x] Fixture `logged_in`: đăng nhập qua form một lần cho cả session, short-circuit nếu test đăng nhập chạy trước đã login rồi.
+- [x] Bỏ heuristic "không thấy link ログイン tức là đã login" — suỷ luận phủ định này sai
+      âm thầm: header đổi class/text là locator không match, `is_visible()` trả `False`, và
+      test báo "đã login" trong khi chưa. Giờ neo vào `logged_in_marker` =
+      `//a[@href='/users/sign_out' and @data-ga-label='sign-out']` — link ログアウト mà server
+      chỉ render khi đã đăng nhập. Tách làm ba vì một hàm không gánh được cả hai vai:
+      - `is_logged_in()` — probe rẻ cho fixture ngắn mạch, dùng `count() > 0`, không retry.
+        Dùng `expect()` ở đây thì lúc chưa login phải chờ hết 30s mới biết, mà đó là
+        trường hợp bình thường. Cũng không dùng `is_visible()`: header render hai lần
+        (desktop + hamburger) và bản desktop nằm trong dropdown ẩn nên `visible=false`.
+      - `expect_logged_in()` — assert có retry (`to_be_attached()` trên `.first`), dùng trong
+        fixture `logged_in` và test.
+      - `expect_login_success()` — assert hành vi ngay sau submit: URL tự về home
+        (`re.compile(rf"^{re.escape(base_url)}/?$")`) + `div.globalNotice > p.globalNotice__description`
+        có text `ログインに成功しました`. Chỉ test dùng, không đưa vào fixture vì thông báo chỉ hiện một lần.
+      Verify: `pytest` — 5/5 pass; chạy riêng `tests/test_photographer_profile.py` setup 10.6s
+      (không treo 30s) xác nhận nhánh probe-chưa-login vẫn nhanh.
 - [x] Gom timeout về một chỗ trong fixture `page` (`DEFAULT_TIMEOUT_MS`, áp cho cả action, navigation và `expect`).
 - [x] `scripts/check.py`: `pytest --setup-plan` + `pyright` trong một lệnh, bắt lỗi sai tên fixture và sai kiểu mà không cần mở browser.
 - [x] Cập nhật lại `README.md` cho khớp code hiện tại (tên file page object, bỏ bước

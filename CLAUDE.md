@@ -35,7 +35,7 @@ before a browser run — seconds instead of minutes.
 ## Layout
 
 ```
-pages/login.py                       LoginPage: header ログイン link + email/password form
+pages/login.py                       LoginPage: header ログイン link + email/password form + login-state assertions
 pages/photographer_profile.py        PhotographerProfilePage + BookingSlot dataclass (calendar)
 pages/booking_request.py             BookingRequestPage (post-slot-click page; locators confirmed)
 tests/conftest.py                    dotenv, session fixtures, `logged_in` gate
@@ -61,7 +61,7 @@ Two separate gates — don't confuse them:
 2. **The fotowa app login** at `/users/sign_in` *is* a normal email/password form, and the tests
    drive it. The `logged_in` session fixture does this once per run: `goto_home_page()`,
    short-circuit if `is_logged_in()`, otherwise `goto_login_page()` → `login(email, password)` →
-   assert.
+   `expect_logged_in()`.
 
 Why a separate Chrome profile and not the user's real one: Chrome 136+ refuses remote debugging on
 the default user-data-dir, and App-Bound Encryption makes copied cookies undecryptable.
@@ -127,8 +127,21 @@ everything else acts.
 mobile), so a naive selector hits 2 nodes and raises `strict mode violation`. Anchor to something
 unique or add `.first`.
 
-**Locators are XPath and Japanese-text-based** (`text()='ログイン'`, error text
-`メールアドレスまたはパスワードが正しくありません`). The UI is Japanese.
+**Locators are XPath and Japanese-text-based** (`text()='ログイン'`, success notice
+`ログインに成功しました`). The UI is Japanese.
+
+**Login state is asserted positively, never by absence.** `LoginPage` has three separate members
+for it, because one method cannot serve both roles:
+- `logged_in_marker` — `//a[@href='/users/sign_out' and @data-ga-label='sign-out']`, the ログアウト
+  link the server only renders when authenticated. Matches **2** nodes (desktop header + hamburger)
+  and the desktop one sits in a hover dropdown, so it reads `visible=false` — test for
+  *attachment*, not visibility, and use `.first` under strict mode.
+- `is_logged_in()` — `count() > 0`, no retry. The `logged_in` fixture's short-circuit probe: "not
+  logged in" is a normal outcome, so it must not burn `DEFAULT_TIMEOUT_MS`.
+- `expect_logged_in()` / `expect_login_success()` — retrying assertions. The latter is the
+  post-submit behaviour (URL back to home + `div.globalNotice > p.globalNotice__description`
+  showing `ログインに成功しました`) and belongs to `test_02` only; the notice shows once, so the
+  fixture uses `expect_logged_in()` instead.
 
 ## The booking calendar (the tricky page object)
 

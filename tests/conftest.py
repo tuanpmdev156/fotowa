@@ -32,7 +32,6 @@ AUTH_STATE = Path(os.getenv("AUTH_STATE", AUTH_DIR / "storage_state.json"))
 
 @pytest.fixture(scope="session")
 def base_url() -> str:
-    # BASE_URL phải đến từ `.env` (hoặc từ biến môi trường của shell).
     url = os.getenv("BASE_URL")
     if not url:
         pytest.fail(
@@ -105,6 +104,9 @@ def logged_in(login_page: LoginPage, credentials: tuple[str, str]) -> None:
 
     Fixture này đăng nhập qua form một lần cho cả session. Nếu test đăng nhập chạy
     trước đã login rồi thì `is_logged_in()` ngắn mạch, không làm lại.
+
+    Chỉ assert `expect_logged_in()` (trạng thái bền) chứ không `expect_login_success()`:
+    thông báo thành công chỉ hiện một lần, kiểm nó là việc của test login.
     """
     login_page.goto_home_page()
     if login_page.is_logged_in():
@@ -113,7 +115,7 @@ def logged_in(login_page: LoginPage, credentials: tuple[str, str]) -> None:
     login_page.goto_login_page()
     login_page.expect_login_form_loaded()
     login_page.login(*credentials)
-    assert login_page.is_logged_in(), "Failed to log in to the fotowa app"
+    login_page.expect_logged_in()
 
 
 # Phụ thuộc `logged_in` state: page object chỉ được tạo sau khi đăng nhập xong.
@@ -124,8 +126,7 @@ def photographer_profile_page(
     return PhotographerProfilePage(page, base_url)
 
 
-# Không cần `logged_in`: ta tới trang này bằng click từ calendar, nên nó luôn
-# chạy sau test đã đăng nhập.
+# Không cần `logged_in`: ta tới trang này bằng click từ calendar, luôn chạy sau khi đã đăng nhập.
 @pytest.fixture(scope="session")
 def booking_request_page(page: Page, base_url: str) -> BookingRequestPage:
     return BookingRequestPage(page, base_url)

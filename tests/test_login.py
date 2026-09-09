@@ -9,4 +9,5 @@ def test_01_login_form_is_displayed(login_page: LoginPage):
 
 def test_02_login_with_valid_credentials(login_page: LoginPage, credentials: tuple[str, str]):
     login_page.login(*credentials)
-    assert login_page.is_logged_in(), "Login failed: the header still shows the ログイン link"
+    login_page.expect_login_success()
+    login_page.expect_logged_in()
