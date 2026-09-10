@@ -53,7 +53,7 @@ Các việc còn tồn của bộ test. Cập nhật lần cuối: 2026-09-09.
       - **Env phải đọc trong `conftest.py`, không đọc trong thân class của page object.**
         `conftest` `import pages...` **trước** khi gọi `load_dotenv()`, nên `os.getenv` trong thân
         class chạy lúc `.env` chưa được nạp — nó chỉ thấy biến set sẵn trong shell và âm thầm rơi
-        về default. Đây là lý do `PHOTOGRAPHER_NAME` nằm cạnh `DEFAULT_TIMEOUT_MS` chứ không nằm
+        về default. Đây là lý do `PHOTOGRAPHER_NAME` được đọc trong `conftest.py` chứ không nằm
         trong page object.
       - Constant `PATH` cấp class (và comment đi kèm đã lệch với code) bị xoá.
       Verify: `pytest` 5/5 pass với default. Override thật cũng đã kiểm —
@@ -97,10 +97,27 @@ Các việc còn tồn của bộ test. Cập nhật lần cuối: 2026-09-09.
         có text `ログインに成功しました`. Chỉ test dùng, không đưa vào fixture vì thông báo chỉ hiện một lần.
       Verify: `pytest` — 5/5 pass; chạy riêng `tests/test_photographer_profile.py` setup 10.6s
       (không treo 30s) xác nhận nhánh probe-chưa-login vẫn nhanh.
-- [x] Gom timeout về một chỗ trong fixture `page` (`DEFAULT_TIMEOUT_MS`, áp cho cả action, navigation và `expect`).
+- [x] ~~Gom timeout về một chỗ trong fixture `page` (`DEFAULT_TIMEOUT_MS`)~~ — **đã revert**.
+      Hai dòng `set_default_timeout` / `set_default_navigation_timeout` chỉ set lại đúng default
+      30s của Playwright, và không ai tune biến env này. Xoá cả `DEFAULT_TIMEOUT_MS` lẫn
+      `expect.set_options`; giờ dùng thẳng default của Playwright (30s action/navigation, 5s
+      `expect`). Verify: 3 run liên tiếp 5/5 pass, không flake vì `expect` 5s.
+- [x] `browser_context` chuyển từ `new_context(storage_state=...)` sang `launch_persistent_context`
+      trên `.auth/chrome-profile` (dùng chung với `save_auth.py`).
+      Lý do: `assets/bundle/vendor.js` nặng **10.5 MB, server không gzip**, lại là blocking script
+      trong `<head>`. Context cache rỗng phải tải lại mỗi run → DOMContentLoaded **110s**, quá 30s
+      timeout của `goto`, cả suite fail ngay `page.goto` đầu tiên. Profile giữ disk cache → **1.8s**.
+      Đo thêm để loại trừ: chặn hết analytics không giúp gì (93s vs 100s); `wait_until="commit"`
+      cũng không (goto 0.8s nhưng header 113s mới attach, vì bundle chặn parser).
+      Kèm theo: xoá cookie `_session_id` lúc mở context — profile giữ cookie giữa các run nên run
+      thứ hai vào thẳng trạng thái đã đăng nhập và `test_01_login_form_is_displayed` fail. Cookie
+      `AWSELBAuthSessionCookie-*` của cổng SSO phải giữ.
+      Verify: 5/5 pass, 3 run liên tiếp, ~11s/run (trước đó fail sau 93s).
+      Còn lại: CI/headless vẫn ăn ~110s ở lần chạy đầu vì cache rỗng — gốc rễ là app serve 10.5 MB
+      không nén, nên report cho dev.
 - [x] `scripts/check.py`: `pytest --setup-plan` + `pyright` trong một lệnh, bắt lỗi sai tên fixture và sai kiểu mà không cần mở browser.
 - [x] Cập nhật lại `README.md` cho khớp code hiện tại (tên file page object, bỏ bước
-      `playwright install`, thêm `scripts/check.py` + `DEFAULT_TIMEOUT_MS`, xoá mục "Ghi chú dọn
+      `playwright install`, thêm `scripts/check.py`, xoá mục "Ghi chú dọn
       dẹp" đã sai).
 - [x] Đọc ngày/giờ của slot từ chính ô được bấm (`BookingSlot`) thay vì hardcode ngày.
 - [x] `pages/booking_request.py` hết là stub: locator thật

@@ -8,7 +8,6 @@ from playwright.sync_api import (
     BrowserContext,
     Page,
     Playwright,
-    expect,
     sync_playwright,
 )
 
@@ -21,16 +20,21 @@ ROOT = Path(__file__).resolve().parent.parent
 # Thông tin đăng nhập và URL đích nằm trong `.env` (copy từ `.env.example`).
 load_dotenv(ROOT / ".env")
 
-# Test lấy trạng thái đăng nhập từ `storage_state`: chạy `scripts/save_auth.py` một lần để ghi ra `.auth/storage_state.json`, sau đó mọi test dùng lại cookie đó.
+# Cổng SSO của staging: chạy `scripts/save_auth.py` một lần để đăng nhập Google vào profile
+# `.auth/chrome-profile`; test dùng lại chính profile đó (xem fixture `browser_context`).
 
-# Timeout mặc định cho mọi action/navigation/assertion, đặt một chỗ duy nhất ở fixture `page` bên dưới. 
-DEFAULT_TIMEOUT_MS = int(os.getenv("DEFAULT_TIMEOUT_MS", 30000))
-
-# Photographer dùng cho test calendar/booking. Default là photographer "bebe" 
+# Photographer dùng cho test calendar/booking. Default là photographer "bebe"
 PHOTOGRAPHER_NAME = os.getenv("PHOTOGRAPHER_NAME", "bebe")
 
 AUTH_DIR = Path(os.getenv("AUTH_DIR", ROOT / ".auth"))
-AUTH_STATE = Path(os.getenv("AUTH_STATE", AUTH_DIR / "storage_state.json"))
+
+# Profile Chrome dùng chung với `scripts/save_auth.py`: giữ cookie SSO **và** disk cache.
+AUTOMATION_PROFILE_DIR = Path(
+    os.getenv("AUTOMATION_PROFILE_DIR", AUTH_DIR / "chrome-profile")
+)
+
+# Cookie session của app fotowa (Rails), khác với cookie cổng SSO `AWSELBAuthSessionCookie-*`.
+APP_SESSION_COOKIE = "_session_id"
 
 
 @pytest.fixture(scope="session")
@@ -49,17 +53,29 @@ def playwright_instance() -> Iterator[Playwright]:
     with sync_playwright() as p:
         yield p
 
+
 @pytest.fixture(scope="session")
 def browser_context(playwright_instance: Playwright) -> Iterator[BrowserContext]:
     p = playwright_instance
 
-    browser = p.chromium.launch(channel="chrome", headless=False)
-    # Chưa có state đã lưu vẫn ổn với các test chỉ xem trang đăng nhập.
-    state = str(AUTH_STATE) if AUTH_STATE.exists() else None
-    context = browser.new_context(storage_state=state)
+    # Mở lại profile cũ, không tạo context mới, để giữ cache của Chrome.
+    # `vendor.js` nặng 10.5 MB và không nén: cache rỗng mất 110s, quá 30s timeout của goto.
+    # Có cache thì 1.8s. Cookie SSO cũng nằm sẵn trong profile.
+    # Lưu ý: đóng hết cửa sổ Chrome đang mở profile này, không thì bị khoá.
+    AUTOMATION_PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+    context = p.chromium.launch_persistent_context(
+        user_data_dir=str(AUTOMATION_PROFILE_DIR),
+        channel="chrome",
+        headless=False,
+    )
+    # Profile giữ luôn cookie, nên lần chạy sau sẽ vào thẳng trạng thái đã đăng nhập và
+    # `test_01_login_form_is_displayed` không thấy form. Xoá cookie login của app để mỗi lần
+    # chạy đều bắt đầu từ chưa đăng nhập. Cookie SSO (`AWSELBAuthSessionCookie-*`) giữ nguyên,
+    # xoá là kẹt lại ở Google.
+    context.clear_cookies(name=APP_SESSION_COOKIE)
+
     yield context
     context.close()
-    browser.close()
 
 
 # Hai fixture này ghi đè `context`/`page` gốc của pytest-playwright, bỏ qua fixture `new_context` của plugin,
@@ -73,11 +89,6 @@ def context(browser_context: BrowserContext) -> BrowserContext:
 @pytest.fixture(scope="session")
 def page(context: BrowserContext) -> Iterator[Page]:
     page = context.new_page()
-    # Ba loại timeout riêng biệt: action, navigation, và assertion của `expect`
-    # (mặc định chỉ 5s và không chịu ảnh hưởng của hai cái kia).
-    page.set_default_timeout(DEFAULT_TIMEOUT_MS)
-    page.set_default_navigation_timeout(DEFAULT_TIMEOUT_MS)
-    expect.set_options(timeout=DEFAULT_TIMEOUT_MS)
     yield page
     page.close()
 
@@ -117,8 +128,7 @@ def logged_in(login_page: LoginPage, credentials: tuple[str, str]) -> None:
 
 @pytest.fixture(scope="session")
 def photographer_path() -> str:
-    """Path trang profile của photographer
-    """
+    """Path trang profile của photographer"""
     return f"/photographers/{PHOTOGRAPHER_NAME}"
 
 

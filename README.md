@@ -31,7 +31,7 @@ Biến set sẵn trong shell sẽ thắng `.env`, dùng để ghi đè tạm cho
 
 ```powershell
 $env:BASE_URL = "https://moi-truong-khac.fotowa.com"
-$env:PHOTOGRAPHER_NAME = "takajun"
+$env:PHOTOGRAPHER_NAME = "bebe"
 ```
 
 ---
@@ -53,9 +53,16 @@ notepad .env
 .venv\Scripts\python.exe scripts\save_auth.py
 ```
 
-Bước 3 mở một cửa sổ Chrome với profile automation riêng. Bạn hoàn tất đăng nhập Google; ngay khi
-trình duyệt quay về một trang fotowa, cookie được ghi vào `.auth/storage_state.json` và mọi test
-tự động dùng lại.
+Bước 3 mở một cửa sổ Chrome với profile automation riêng (`.auth/chrome-profile`). Bạn hoàn tất
+đăng nhập Google; ngay khi trình duyệt quay về một trang fotowa là xong. Test dùng lại **đúng
+profile đó**, nên có sẵn cookie SSO và — quan trọng không kém — disk cache của Chrome.
+
+Vì sao cần cache: `assets/bundle/vendor.js` của staging nặng 10.5 MB và server không nén, lại là
+blocking script trong `<head>`. Chạy với cache rỗng thì riêng việc mở trang chủ mất ~110s, vượt
+timeout 30s của `goto` và cả suite fail ngay từ test đầu. Dùng lại profile thì còn ~1.8s.
+
+Hệ quả cần nhớ: **đóng mọi cửa sổ Chrome đang mở profile này trước khi chạy test**, nếu không
+`launch_persistent_context` sẽ báo profile bị khoá.
 
 ---
 

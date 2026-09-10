@@ -56,8 +56,10 @@ Two separate gates — don't confuse them:
    Run `.venv\Scripts\python.exe scripts\save_auth.py` once. It opens Chrome with a dedicated
    persistent profile (`.auth/chrome-profile`), waits (default 300s, `GOOGLE_SSO_LOGIN_TIMEOUT_MS`)
    for a redirect back to `BASE_URL`'s host (excluding `/oauth2/*`), then dumps
-   `.auth/storage_state.json`. `conftest.browser_context` loads that state if the file exists
-   (absent is tolerated — tests that only view the login page still work).
+   `.auth/storage_state.json`. **The tests no longer read that file** —
+   `conftest.browser_context` calls `launch_persistent_context` on the *same*
+   `.auth/chrome-profile`, so the SSO cookies are already there. `save_auth.py` still writes the
+   state file; nothing consumes it.
 2. **The fotowa app login** at `/users/sign_in` *is* a normal email/password form, and the tests
    drive it. The `logged_in` session fixture does this once per run: `goto_home_page()`,
    short-circuit if `is_logged_in()`, otherwise `goto_login_page()` → `login(email, password)` →
@@ -65,6 +67,24 @@ Two separate gates — don't confuse them:
 
 Why a separate Chrome profile and not the user's real one: Chrome 136+ refuses remote debugging on
 the default user-data-dir, and App-Bound Encryption makes copied cookies undecryptable.
+
+**Why the tests share that profile instead of `new_context(storage_state=...)` — the cache.**
+`assets/bundle/vendor.js` on staging is **10.5 MB served uncompressed** (no `content-encoding`, no
+`cache-control`), and it is a blocking `<script>` in `<head>`. A fresh `new_context()` has an empty
+disk cache, so every run re-downloaded it: **DOMContentLoaded 110s**, well past the 30s navigation
+timeout, and the whole suite failed on the very first `page.goto`. A persistent profile keeps the
+disk cache between runs — measured **1.8s**, and the suite went from red to 5/5 in ~11s. This is
+not staging being slow: opening the site in a normal Chrome window is fast for the same reason.
+
+The catch is that a persistent profile keeps cookies too, so a second run would start already
+signed in and `test_01_login_form_is_displayed` would find no form. `browser_context` therefore
+clears exactly one cookie at session start, `_session_id` (`APP_SESSION_COOKIE`) — the Rails app
+session. The `AWSELBAuthSessionCookie-0`/`-1` pair is the SSO front door and **must survive**;
+clearing all cookies strands the run on Google.
+
+Minor side effect: `launch_persistent_context` opens with a blank tab of its own, and the `page`
+fixture adds a second one. The tests all run in the tab the fixture created; the blank one is
+inert.
 
 ## Environment variables
 
@@ -75,16 +95,21 @@ win over the file.
   `https://master.review.fotowa.com`.
 - `TEST_EMAIL`, `TEST_PASSWORD` — the `credentials` fixture **skips** if either is empty, and that
   skip cascades through `logged_in` to everything downstream.
-- `DEFAULT_TIMEOUT_MS` (30000) — applied in the `page` fixture to action, navigation **and**
-  `expect` assertion timeouts (`expect` defaults to 5s and is not affected by the other two).
 - `PHOTOGRAPHER_NAME` (`bebe`) — which staging photographer the calendar/booking tests use. The
   `photographer_path` fixture turns it into `/photographers/<slug>`, shared by
   `PhotographerProfilePage` (to `goto`) and `BookingRequestPage` (to assert the destination URL).
   **The read must stay in `conftest.py`**, not in a page-object class body: `conftest` imports
   `pages.*` *before* it calls `load_dotenv()`, so an `os.getenv` in a class body would never see
   `.env` — only a real shell variable — and would silently fall back to the default.
-- `AUTH_DIR` (`.auth`), `AUTH_STATE` (`.auth/storage_state.json`),
-  `AUTOMATION_PROFILE_DIR` (`.auth/chrome-profile`), `GOOGLE_SSO_LOGIN_TIMEOUT_MS` (300000).
+- `AUTH_DIR` (`.auth`) and `AUTOMATION_PROFILE_DIR` (`.auth/chrome-profile`) — read by **both**
+  `conftest.py` and `save_auth.py`; they must resolve to the same profile or the tests lose the
+  warm cache and the SSO cookies.
+- `AUTH_STATE` (`.auth/storage_state.json`) and `GOOGLE_SSO_LOGIN_TIMEOUT_MS` (300000) — only
+  `save_auth.py` reads these now.
+
+There is **no timeout env var**. Playwright's own defaults are used: 30s for actions and
+navigation, 5s for `expect`. The former `DEFAULT_TIMEOUT_MS` set the first two to the value they
+already had, so two of its three lines were no-ops.
 
 ## Fixtures (all `scope="session"`, in `tests/conftest.py`)
 
@@ -144,7 +169,7 @@ for it, because one method cannot serve both roles:
   and the desktop one sits in a hover dropdown, so it reads `visible=false` — test for
   *attachment*, not visibility, and use `.first` under strict mode.
 - `is_logged_in()` — `count() > 0`, no retry. The `logged_in` fixture's short-circuit probe: "not
-  logged in" is a normal outcome, so it must not burn `DEFAULT_TIMEOUT_MS`.
+  logged in" is a normal outcome, so it must not burn the 30s action timeout.
 - `expect_logged_in()` / `expect_login_success()` — retrying assertions. The latter is the
   post-submit behaviour (URL back to home + `div.globalNotice > p.globalNotice__description`
   showing `ログインに成功しました`) and belongs to `test_02` only; the notice shows once, so the
@@ -168,7 +193,7 @@ derived from position:
 `goto_week_with_available_date()` clicks 次週 (`//li[@class='next']/a`) up to `MAX_WEEKS = 10`
 times until the visible week has an `available` cell — staging is often fully booked and that
 is data, not a bug. It uses `.count()`, not `expect(...).not_to_have_count(0)`, so a booked week
-costs one call instead of a full `DEFAULT_TIMEOUT_MS`. The render gate after each click is
+costs one call instead of a full 30s timeout. The render gate after each click is
 `page.wait_for_function` (the day cell must exist **and** differ): `not_to_have_text` passes the
 instant Vue detaches the `td` mid-rerender, which returns before the new week is painted.
 
@@ -191,7 +216,7 @@ hardcoded.
   received the cell that was clicked. `self.path_pattern` is built from the same `photographer_path` fixture, so the
   slug is spelled once for the whole suite. No `$` anchor — the app may add params. `test_03` calls it
   **before** `expect_available_slot()`: a wrong page then fails on the URL instead of burning
-  `DEFAULT_TIMEOUT_MS` on a missing element. Verified in both directions — a deliberately wrong
+  the element timeout on a missing element. Verified in both directions — a deliberately wrong
   pattern fails on that exact line.
 - Still open on the booking flow: fill in + submit the booking form (the suite currently stops at
   the slot click).
@@ -209,6 +234,13 @@ hardcoded.
   `credentials` propagates through `logged_in` to every page test.
 - **Timeout waiting for the login form** — you're probably stranded on the Google SSO page; the
   saved session expired. Re-run `scripts/save_auth.py`.
+- **`Page.goto` times out at 30s on the very first test** — the profile's disk cache is cold (fresh
+  or deleted `.auth/chrome-profile`), so Chrome is re-downloading the 10.5 MB uncompressed
+  `vendor.js`; DOMContentLoaded takes ~110s. Run `scripts/save_auth.py` once — it warms the same
+  profile while it signs in. Symptom check: `wait_until="commit"` returns in 0.8s but the header
+  takes 113s to attach, because `vendor.js` blocks the parser.
+- **Run 1 green, run 2 fails on `test_01_login_form_is_displayed`** — the `_session_id` clear in
+  `browser_context` was lost; without it the persistent profile carries the login across runs.
 - **`launch_persistent_context` fails / profile locked** — close every Chrome window using
   `.auth/chrome-profile`.
 - **`fixture '...' not found`, only at runtime** — run `scripts/check.py`; pyright can't see fixture
