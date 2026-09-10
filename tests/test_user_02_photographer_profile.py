@@ -1,0 +1,15 @@
+import pytest
+
+from pages.photographer_profile import PhotographerProfilePage
+
+# Các test dùng chung một tab và chạy theo thứ tự khai báo: test sau bị skip nếu test trước fail.
+pytestmark = pytest.mark.incremental
+
+
+def TC_01_booking_calendar_is_displayed(photographer_profile_page: PhotographerProfilePage):
+    photographer_profile_page.goto_profile_page()
+    photographer_profile_page.expect_calendar_loaded()
+
+
+def TC_02_booking_calendar_has_available_date(photographer_profile_page: PhotographerProfilePage):
+    photographer_profile_page.expect_has_available_date()
