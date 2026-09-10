@@ -79,7 +79,7 @@ Hệ quả cần nhớ: **đóng mọi cửa sổ Chrome đang mở profile này
 .venv\Scripts\python.exe -m pytest --headed --slowmo 500
 
 # một test case cụ thể
-.venv\Scripts\python.exe -m pytest tests/test_login.py::test_login_form_is_displayed
+.venv\Scripts\python.exe -m pytest tests/test_user_01_login.py::TC_01_login_form_is_displayed
 ```
 
 Không cần activate venv. Nếu vẫn muốn gọi `pytest` trực tiếp thì chạy `.\.venv\Scripts\Activate.ps1`
