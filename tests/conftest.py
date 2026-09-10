@@ -13,7 +13,7 @@ from playwright.sync_api import (
 
 from pages.booking_request import BookingRequestPage
 from pages.login import LoginPage
-from pages.photographer_profile import PhotographerProfilePage
+from pages.photographer_profile import BookingSlot, PhotographerProfilePage
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -146,6 +146,18 @@ def booking_request_page(
     page: Page, base_url: str, photographer_path: str
 ) -> BookingRequestPage:
     return BookingRequestPage(page, base_url, photographer_path)
+
+
+# Precondition của mọi test trên trang private offer: đã bấm một slot trống trên calendar.
+# Đặt ở fixture (không phải ở test) để `tests/test_03_booking_request.py` không phụ thuộc vào việc
+# file test khác đã chạy trước hay chưa — pytest chỉ giải quyết thứ tự cho fixture, không cho test.
+@pytest.fixture(scope="session")
+def selected_slot(photographer_profile_page: PhotographerProfilePage) -> BookingSlot:
+    """Chọn slot trống đầu tiên một lần cho cả session, trả về ngày/giờ của chính ô đó."""
+    photographer_profile_page.goto_profile_page()
+    photographer_profile_page.expect_calendar_loaded()
+    photographer_profile_page.goto_week_with_available_date()
+    return photographer_profile_page.select_first_available_slot()
 
 
 # --- Test chạy nối tiếp trên cùng một tab: test sau bị skip nếu test trước fail ---
