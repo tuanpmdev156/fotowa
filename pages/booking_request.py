@@ -1,10 +1,8 @@
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-
-from playwright.sync_api import Locator, Page, expect
-
 from pages.photographer_profile import BookingSlot
+from playwright.sync_api import Locator, Page, TimeoutError as PlaywrightTimeoutError, expect
 
 # Một buổi chụp mặc định dài 1 tiếng, nên trang đích hiển thị "giờ đã chọn - giờ đã chọn + 1h"
 SHOOTING_DURATION = timedelta(hours=1)
@@ -40,33 +38,45 @@ class BookingRequestPage:
         self.page = page
         self.base_url = base_url
         self.path_pattern = rf"{re.escape(photographer_path)}/private_offers/new"
-
+        # Selected slot datetime
         self.selected_datetime = page.locator("//div[@id='app']//div[@class='shootingDateTimeControl__details']")
-
-        # self.genre_button = page.locator("#private_offer_creation_form_genre_id")
-
-        # self.genre_options = page.locator(
-        #     'div.genreOption[data-genre-id]:not([data-genre-id=""]):visible'
-        # )
-
+        # Genre
+        self.genre_selection_button = page.locator("//button[@id='private_offer_creation_form_genre_id']")
+        self.genre_options = page.locator(
+            'div.genreOption[data-genre-id]:not([data-genre-id=""]):visible'
+        )
+        # Filming location
+        self.filming_location = page.locator("//input[@id='private_offer_creation_form_spot_name']")
+        self.filming_location_suggestion_button = page.locator("//button[@class='spotControlBtn']")
+        self.filming_location_suggestion_list = page.locator("//div[@class='spotControl__suggest']//div[@class='details']")
+        self.long_distance_fee_warning = page.locator("//div[contains(@class,'longDistanceFee')]")
+        # Option cards
         self.option_cards = page.locator("//div[contains(@class,'shootingOptionControl__card')]")
-
         self.payment_table = page.locator("//div[@class='payment__table']")
-        # Mọi ô giá trừ dòng Total(合計).
+        # Các dòng giá tiền trừ dòng Total(合計).
         self.subtotal_prices = self.payment_table.locator(
             "//tbody/tr[not(@class='total')]/td[contains(@class,'privateOffers__price')]"
-        )
+        ) 
         # Các option đang tick.
         self.option_rows = self.payment_table.locator("//tbody/tr[@class='option_item']")
         self.total_price = self.payment_table.locator("//tr[@class='total']//td[@class='privateOffers__price']")
 
+        # Submit button
+        self.confirm_booking_button = page.locator("//button[@type='submit']")
     # --- Actions ---
 
-    # def select_first_genre(self):
-    #     """Chọn ジャンル đầu tiên. Bắt buộc: khối option chưa render khi chưa chọn genre."""
-    #     self.genre_button.click()
-    #     self.genre_options.first.click()
-    #     expect(self.option_cards.first).to_be_visible()
+    def select_first_genre(self):
+        """Genre is required field. Chọn genre đầu tiên trong danh sách."""
+        self.genre_selection_button.click()
+        self.genre_options.first.click()
+        expect(self.option_cards.first).to_be_visible()
+
+    def select_filming_location(self):
+        """Chọn địa điểm quay phim."""
+        self.filming_location.fill("Tokyo Tower")
+        self.filming_location_suggestion_button.click()
+        expect(self.filming_location_suggestion_list.first).to_be_visible(timeout = 15_000)
+        self.filming_location_suggestion_list.first.click()
 
     def set_option(self, label: str, selected: bool = True):
         """Đưa option về trạng thái `selected`. Nếu đã đúng trạng thái thì không bấm nữa."""
@@ -81,6 +91,7 @@ class BookingRequestPage:
     def read_option_cards(self) -> list[ShootingOption]:
         """Đọc tên/giá/trạng thái của từng option card.
         """
+        expect(self.option_cards.first).to_be_visible(timeout=15_000)
         cards = self.option_cards.all()
         if not cards:
             raise AssertionError("No shooting option cards found on the page.")
@@ -102,18 +113,17 @@ class BookingRequestPage:
         """Cộng mọi dòng trong bảng giá, trừ dòng Total(合計). Bỏ qua dòng không có giá."""
         return sum(_parse_yen(text) for text in self.subtotal_prices.all_inner_texts() if text.strip())
 
-    # --- Private Methods ---
+    # --- Helper Methods ---
 
     def _option_card(self, label: str) -> Locator:
         return self.option_cards.filter(
             has=self.page.locator(".shootingOptionControl__title span", has_text=label)
         )
 
-    def _get_option_price(self, label: str) -> Locator:
-        """Giá của dòng option đang tick."""
+    def _price_cell(self, label: str) -> Locator:
+        """Đọc ô giá theo label, dùng chung cho option và phí di chuyển xa"""
         return self.payment_table.locator(
-            f"//tr[contains(@class,'option_item')][th[normalize-space()='{label}']]"
-            "/td[contains(@class,'privateOffers__price')]"
+            f"//tbody/tr[th[normalize-space()='{label}']]/td[contains(@class,'privateOffers__price')]"
         )
 
     # --- Assertion ---
@@ -121,7 +131,7 @@ class BookingRequestPage:
     def expect_selected_slot_in_url(self, slot: BookingSlot):
         """Assert đã sang trang tạo private offer, đúng ngày/giờ của ô vừa bấm.
 
-        URL contains(`?shooting_date=2026-09-12&shooting_time=18:30`)
+        URL contains(`?shooting_date=yyyy-MM-dd&shooting_time=HH:MM`)
         """
         expect(self.page).to_have_url(
             re.compile(
@@ -133,6 +143,7 @@ class BookingRequestPage:
 
     def expect_available_slot(self, slot: BookingSlot):
         """Assert hiển thị đúng ngày/giờ vừa bấm ở calendar."""
+        expect(self.selected_datetime).to_be_visible(timeout=15_000)
         expect(self.selected_datetime).to_contain_text(
             f"{slot.year}/{slot.month:02d}/{slot.day:02d}"
         )
@@ -155,14 +166,29 @@ class BookingRequestPage:
         expect(self.total_price).to_have_text(f"¥{expected:,}")
 
     def expect_payment_table_matches_selection(self):
-        """Bảng giá khớp đúng những option đang tick — cả tên, giá và tổng.
+        """Bảng giá khớp đúng những option đang tick: tên, giá và tổng.
         """
         selected = [opt for opt in self.read_option_cards() if opt.selected]
 
         # 1. Bảng có đúng số lượng option đang tick, mỗi dòng đúng cặp tên và giá.
         expect(self.option_rows).to_have_count(len(selected))
         for option in selected:
-            expect(self._get_option_price(option.label)).to_have_text(f"¥{option.price:,}")
+            expect(self._price_cell(option.label)).to_have_text(f"¥{option.price:,}")
 
         # 2. Tổng bằng đúng các dòng đang hiển thị.
         self.expect_total(self.sum_subtotal())
+
+    def has_long_distance_fee_warning(self) -> bool:
+        """Địa điểm vừa chọn có phát sinh phí đi xa không."""
+        try:
+            self.long_distance_fee_warning.wait_for(state="visible")
+        except PlaywrightTimeoutError:
+            return False
+        return True
+
+    def expect_long_distance_fee_charged(self):
+        """Bảng giá có dòng phí di chuyển xa (遠方出張料) với số tiền > 0."""
+        cell = self._price_cell("遠方出張料")
+        expect(cell).to_be_visible()
+        long_distance_fee = _parse_yen(cell.inner_text())
+        assert long_distance_fee > 0

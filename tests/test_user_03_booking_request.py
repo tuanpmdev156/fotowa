@@ -15,7 +15,7 @@ def TC_01_selected_slot_is_displayed(
     booking_request_page.expect_available_slot(selected_slot)
 
 
-def TC_02_payment_table_has_no_option_by_default(booking_request_page: BookingRequestPage):
+def TC_02_no_option_in_payment_table(booking_request_page: BookingRequestPage):
     """Chưa tick option nào."""
     #booking_request_page.select_first_genre()
     booking_request_page.expect_payment_table_loaded()
@@ -24,7 +24,7 @@ def TC_02_payment_table_has_no_option_by_default(booking_request_page: BookingRe
     booking_request_page.expect_payment_table_matches_selection()
 
 
-def TC_03_selected_option_in_payment_table(booking_request_page: BookingRequestPage):
+def TC_03_select_an_option_in_payment_table(booking_request_page: BookingRequestPage):
     """Từng option: tick thì bảng hiện đúng tên option + giá và cộng vào tổng, bỏ tick thì trừ lại."""
     for option in booking_request_page.read_option_cards():
         booking_request_page.set_option(option.label, selected=True)
@@ -34,16 +34,25 @@ def TC_03_selected_option_in_payment_table(booking_request_page: BookingRequestP
         booking_request_page.expect_payment_table_matches_selection()
 
 
-def TC_04_payment_table_sums_all_options(booking_request_page: BookingRequestPage):
+def TC_04_select_multiple_options_in_payment_table(booking_request_page: BookingRequestPage):
     """Tick cả hai option: đủ hai dòng và tổng cộng đủ cả hai."""
     options = booking_request_page.read_option_cards()
+    # Tick các option
     for option in options:
-        booking_request_page.set_option(option.label)
-
+        booking_request_page.set_option(option.label, selected=True)
     booking_request_page.expect_payment_table_matches_selection()
 
-    # Bỏ tick hết: vừa trả trang về trạng thái sạch cho test sau, vừa assert app có trừ lại.
+    # Bỏ tick các option
     for option in booking_request_page.read_option_cards():
         booking_request_page.set_option(option.label, selected=False)
     booking_request_page.expect_no_option_selected()
+    booking_request_page.expect_payment_table_matches_selection()
+
+def TC_05_long_distance_fee_in_payment_table(booking_request_page: BookingRequestPage):
+    """Địa điểm có cảnh báo phí đi xa và tổng tiền có cộng khoản đó."""
+    booking_request_page.select_first_genre()
+    booking_request_page.select_filming_location()
+    if not booking_request_page.has_long_distance_fee_warning():
+        pytest.skip("Địa điểm đã chọn không phát sinh phí đi xa, bỏ qua test này.")
+    booking_request_page.expect_long_distance_fee_charged()
     booking_request_page.expect_payment_table_matches_selection()

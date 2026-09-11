@@ -36,13 +36,13 @@ class PhotographerProfilePage:
 
         self.booking_table_header = page.locator("//table[@class='calendar__header']")
         # Table cho mỗi tuần (7 cột, 24 hàng).
-        self.booking_table = self.calendar.locator("xpath=.//table[@class='events']")
-        self.current_year_moth = self.booking_table_header.locator("xpath=.//tr[@class='month']/th[@colspan]")
+        self.booking_table = self.calendar.locator("//table[@class='events']")
+        self.current_year_moth = self.booking_table_header.locator("//tr[@class='month']/th[@colspan]")
         # Cột ngày
-        self.day_headers = self.booking_table_header.locator("xpath=.//tr[@class='dayname']/td")
+        self.day_headers = self.booking_table_header.locator("//tr[@class='dayname']/td")
          # Cột giờ
-        self.time_slots = self.calendar.locator("xpath=.//table[@class='time']//td")
-        self.available_dates = self.calendar.locator("xpath=.//td[@class='available']")
+        self.time_slots = self.calendar.locator("//table[@class='time']//td")
+        self.available_dates = self.calendar.locator("//td[@class='available']")
 
         
 
@@ -81,11 +81,11 @@ class PhotographerProfilePage:
     def select_first_available_slot(self) -> BookingSlot:
         """Click slot trống đầu tiên, trả về ngày/giờ của chính ô đó."""
         for column in range(self.booking_table.count()):
-            cells = self.booking_table.nth(column).locator("xpath=.//tr/td")
+            cells = self.booking_table.nth(column).locator("//tr/td")
             # Lấy class của cả cột trong một lần gọi thay vì hỏi từng ô.
             classes: list[str] = cells.evaluate_all("els => els.map(e => e.className)")
             for row, css in enumerate(classes):
-                if "available" in css.split():
+                if "available" in css.split() and "outdated" not in css.split():
                     slot = self._read_slot(column, row)
                     cells.nth(row).click()
                     return slot
