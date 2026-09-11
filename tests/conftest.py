@@ -1,3 +1,17 @@
+"""Fixture dùng chung cho cả bộ test.
+
+Sơ đồ phụ thuộc (scope trong ngoặc):
+
+    context (session) ─→ page (function) ─→ login_page ─→ logged_in ─→ photographer_profile_page
+        │                   │                                              │
+        │                   └─→ logged_out (chỉ test form login)           └─→ selected_slot
+        │
+        └─→ available_slot (session, tự mở/đóng tab scratch, chỉ trả dữ liệu)
+
+Luật scope: fixture session-scope không xin được fixture function-scope (`ScopeMismatch`), nên hễ
+fixture nào giữ `page` thì buộc phải là function-scope.
+"""
+
 import os
 import re
 from collections.abc import Generator, Iterator
@@ -17,26 +31,31 @@ from pages.user.booking_request import BookingRequestPage
 from pages.user.login import LoginPage
 from pages.user.photographer_profile import BookingSlot, PhotographerProfilePage
 
+# --------------------------------------------------------------------------------------
+# Cấu hình đọc từ `.env`
+# --------------------------------------------------------------------------------------
+
 ROOT = Path(__file__).resolve().parent.parent
 
-# Thông tin đăng nhập và URL đích nằm trong `.env` (copy từ `.env.example`).
+# Thông tin đăng nhập và URL đích nằm trong `.env`.
 load_dotenv(ROOT / ".env")
 
-# Cổng SSO của staging: chạy `scripts/save_auth.py` một lần để đăng nhập Google vào profile
-# `.auth/chrome-profile`; test dùng lại chính profile đó (xem fixture `browser_context`).
-
-# Photographer dùng cho test calendar/booking. Default là photographer "bebe"
 PHOTOGRAPHER_NAME = os.getenv("PHOTOGRAPHER_NAME", "bebe")
 
 AUTH_DIR = Path(os.getenv("AUTH_DIR", ROOT / ".auth"))
 
-# Profile Chrome dùng chung với `scripts/save_auth.py`: giữ cookie SSO **và** disk cache.
+# Profile Chrome dùng chung với `scripts/save_auth.py`; giữ cookie SSO và disk cache.
 AUTOMATION_PROFILE_DIR = Path(
     os.getenv("AUTOMATION_PROFILE_DIR", AUTH_DIR / "chrome-profile")
 )
 
 # Cookie session của app fotowa (Rails), khác với cookie cổng SSO `AWSELBAuthSessionCookie-*`.
 APP_SESSION_COOKIE = "_session_id"
+
+
+# --------------------------------------------------------------------------------------
+# Fixture lấy từ môi trường
+# --------------------------------------------------------------------------------------
 
 
 @pytest.fixture(scope="session")
@@ -51,28 +70,24 @@ def base_url() -> str:
 
 
 @pytest.fixture(scope="session")
-def playwright_instance() -> Iterator[Playwright]:
-    with sync_playwright() as p:
-        yield p
+def credentials() -> tuple[str, str]:
+    """Tài khoản user fotowa."""
+    email = os.getenv("TEST_EMAIL")
+    password = os.getenv("TEST_PASSWORD")
+    if not (email and password):
+        pytest.skip("Must set TEST_EMAIL and TEST_PASSWORD in `.env`")
+    return email, password
 
 
 @pytest.fixture(scope="session")
-def browser_context(playwright_instance: Playwright) -> Iterator[BrowserContext]:
-    p = playwright_instance
+def photographer_path() -> str:
+    """Path trang profile của photographer"""
+    return f"/photographers/{PHOTOGRAPHER_NAME}"
 
-    # Mở lại profile cũ, không tạo context mới, để giữ cache của Chrome.
-    # `vendor.js` nặng 10.5 MB và không nén: cache rỗng mất 110s, quá 30s timeout của goto.
-    # Có cache thì 1.8s. Cookie SSO cũng nằm sẵn trong profile.
-    # Lưu ý: đóng hết cửa sổ Chrome đang mở profile này, không thì bị khoá.
-    AUTOMATION_PROFILE_DIR.mkdir(parents=True, exist_ok=True)
-    context = p.chromium.launch_persistent_context(
-        user_data_dir=str(AUTOMATION_PROFILE_DIR),
-        channel="chrome",
-        headless=False,
-    )
-    yield context
-    context.close()
 
+# --------------------------------------------------------------------------------------
+# Chụp màn hình khi test fail
+# --------------------------------------------------------------------------------------
 
 # Đánh dấu test fail để fixture `page` biết có cần chụp ảnh trước khi đóng tab hay không.
 # `when == "setup"` cũng tính: fixture hỏng (không tìm được slot trống...) cũng cần ảnh.
@@ -112,6 +127,33 @@ def _capture_screenshot(page: Page, request: pytest.FixtureRequest) -> None:
         print(f"Không chụp được màn hình cho {request.node.nodeid}: {exc}")
 
 
+# --------------------------------------------------------------------------------------
+# Browser, context và tab
+# --------------------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def playwright_instance() -> Iterator[Playwright]:
+    with sync_playwright() as p:
+        yield p
+
+
+@pytest.fixture(scope="session")
+def browser_context(playwright_instance: Playwright) -> Iterator[BrowserContext]:
+    p = playwright_instance
+
+    # Mở lại profile cũ, không tạo context mới, để giữ cache của Chrome.
+    AUTOMATION_PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+    context = p.chromium.launch_persistent_context(
+        user_data_dir=str(AUTOMATION_PROFILE_DIR),
+        channel="chrome",
+        headless=False,
+    )
+    yield context
+    context.close()
+
+
+# Ghi đè `context`/`page` gốc của pytest-playwright để tiêm context đã qua cổng SSO vào.
 @pytest.fixture(scope="session")
 def context(browser_context: BrowserContext) -> BrowserContext:
     return browser_context
@@ -127,19 +169,14 @@ def page(context: BrowserContext, request: pytest.FixtureRequest) -> Iterator[Pa
     page.close()
 
 
+# --------------------------------------------------------------------------------------
+# Đăng nhập
+# --------------------------------------------------------------------------------------
+
+
 @pytest.fixture
 def login_page(page: Page, base_url: str) -> LoginPage:
     return LoginPage(page, base_url)
-
-
-@pytest.fixture(scope="session")
-def credentials() -> tuple[str, str]:
-    """Tài khoản user fotowa."""
-    email = os.getenv("TEST_EMAIL")
-    password = os.getenv("TEST_PASSWORD")
-    if not (email and password):
-        pytest.skip("Must set TEST_EMAIL and TEST_PASSWORD in `.env`")
-    return email, password
 
 
 def _sign_in(login_page: LoginPage, credentials: tuple[str, str]) -> None:
@@ -175,10 +212,9 @@ def logged_out(context: BrowserContext) -> None:
     context.clear_cookies(name=APP_SESSION_COOKIE)
 
 
-@pytest.fixture(scope="session")
-def photographer_path() -> str:
-    """Path trang profile của photographer"""
-    return f"/photographers/{PHOTOGRAPHER_NAME}"
+# --------------------------------------------------------------------------------------
+# Page object
+# --------------------------------------------------------------------------------------
 
 
 # Phụ thuộc `logged_in` state: page object chỉ được tạo sau khi đăng nhập xong.
@@ -195,6 +231,11 @@ def booking_request_page(
     page: Page, base_url: str, photographer_path: str
 ) -> BookingRequestPage:
     return BookingRequestPage(page, base_url, photographer_path)
+
+
+# --------------------------------------------------------------------------------------
+# Slot còn trống trên calendar
+# --------------------------------------------------------------------------------------
 
 
 def _find_first_available_slot(profile: PhotographerProfilePage) -> BookingSlot:
