@@ -236,4 +236,5 @@ page. No invalid-credentials test yet, though `LoginPage.expect_error` exists.
 
 - Keep replies short and condensed.
 - Repo prose (README, code comments) is in **Vietnamese** — match it when editing those files.
-- Branch is `master`; upstream main branch is `main`.
+- Single branch `master` — also the default branch on `origin`
+  (https://github.com/tuanpmdev156/fotowa.git). There is no `main`; PRs target `master`.
