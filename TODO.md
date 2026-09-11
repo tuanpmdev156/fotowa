@@ -1,6 +1,6 @@
 # TODO
 
-Các việc còn tồn của bộ test. Cập nhật lần cuối: 2026-09-09.
+Các việc còn tồn của bộ test. Cập nhật lần cuối: 2026-09-11.
 
 ## I.USER
 
@@ -8,139 +8,119 @@ Các việc còn tồn của bộ test. Cập nhật lần cuối: 2026-09-09.
 
 ### Booking
 
-- [ ] Kiểm tra giá tiền cuối cùng trên trang đặt lịch, cả hai nhánh:
-      - **Không chọn option phụ** — tổng tiền = giá cơ bản của plan.
-      - **Có chọn option phụ** — tổng tiền = giá cơ bản + tổng giá các option đã tick, và
-        tổng phải cập nhật lại ngay khi tick/bỏ tick (tính lại ở client).
-      Tính kỳ vọng từ chính giá đọc trên trang (như `BookingSlot`), **không hardcode** con số —
-      giá plan/option trên staging đổi được. Cần confirm locator thật của khối tổng tiền +
-      danh sách option trước khi viết assert.
-- [ ] Điền nốt form đặt lịch và submit (mới chỉ dừng ở bước chọn slot trên calendar).
+- [ ] **Điền nốt form đặt lịch và submit.** `TC_05` giờ dừng ở verify phí đi xa, **chưa có TC nào
+      bấm submit**. `confirm_booking_button = //button[@type='submit']` đã khai báo nhưng không ai
+      dùng, và quá rộng: strict mode sẽ nổ nếu trang có nút submit thứ hai — neo lại theo text
+      tiếng Nhật `確認・決済に進む` (đọc được từ accessibility dump khi chạy verify hướng âm).
+      TC submit cần `expect_submitted()` (assert đã rời `/private_offers/new`).
+- [ ] **Trang review + thanh toán** (sau khi submit) — plan đầy đủ ở
+      `plan/booking-confirm-payment.md`. Đang chặn ở Bước 0: chưa capture DOM nên chưa biết ô thẻ
+      là input thường hay iframe cổng thanh toán. Đã chốt: đặt đơn thật trên staging, **huỷ tay** —
+      khi làm tới đây, mỗi lần chạy cả suite sinh một đơn và ăn mất một slot của
+      `PHOTOGRAPHER_NAME`.
 
 ## II.PH
 
 ### Profile
 
-- [ ] Chưa có test cho trường hợp calendar **không có** slot trống nào —
-      `select_first_available_slot()` raise `AssertionError`, cần quyết định đó có phải hành vi
-      mong muốn không.
-
 
 
 ## III.Infrastructure
+
+- [ ] **Tách test suite theo role (user / photographer).** Hiện tất cả test nằm phẳng trong
+      `tests/` và chỉ có một tài khoản (`TEST_EMAIL`/`TEST_PASSWORD`). Khi thêm test cho
+      photographer sẽ có hai role, hai tài khoản ⇒ chia như sau:
+
+      ```
+      tests/
+        conftest.py        # fixture chung: browser_context, page, base_url, login_page,
+                           # + hàm/factory login dùng chung. KHÔNG còn `logged_in` ở đây.
+        user/conftest.py   # credentials + logged_in cho user (TEST_EMAIL/TEST_PASSWORD)
+        user/test_01_login.py, test_02_photographer_profile.py, test_03_booking_request.py
+        ph/conftest.py     # credentials + logged_in cho photographer (PH_EMAIL/PH_PASSWORD)
+        ph/test_01_...py
+      ```
+
+      Bốn quyết định đi kèm, mỗi cái đều có lý do cụ thể:
+
+      - **`logged_in` phải chuyển xuống conftest con, xoá khỏi conftest gốc.** Đây là điểm dễ sai
+        nhất: fixture `scope="session"` ở gốc chỉ **chạy một lần rồi cache** cho cả session, bất kể
+        ai gọi. Nếu chỉ override `credentials` ở conftest con mà để `logged_in` ở gốc, thì khi hai
+        thư mục chạy chung một session, thư mục thứ hai dùng lại phiên đăng nhập của thư mục thứ
+        nhất — và `is_logged_in()` short-circuit sẽ che luôn lỗi này, test pass với sai tài khoản.
+        Đặt `logged_in` ở mỗi conftest con thì mỗi role là một FixtureDef riêng, đúng cả khi chạy
+        tách lẫn chạy gộp. Logic login chung vẫn để ở gốc, hai conftest con gọi lại — không
+        copy-paste.
+      - **Một lệnh chạy = một role**, chạy tuần tự (`scripts/run_all.py` hoặc `.ps1`: chạy
+        `pytest tests/user` rồi `pytest tests/ph`, gộp exit code). Bắt buộc tuần tự vì
+        `launch_persistent_context` **khoá** `.auth/chrome-profile`; hai process song song là fail.
+        Mỗi lệnh là một session riêng ⇒ browser mới, `_session_id` clear lại, login lại ⇒ hai
+        thư mục không dính state của nhau và thứ tự giữa hai thư mục không còn là vấn đề.
+      - **Giữ nguyên `testpaths = tests`** cho `--collect-only` / `--setup-plan` (và
+        `scripts/check.py`) hoạt động, nhưng **không chạy `pytest` trần nữa** — chạy trần sẽ gom
+        cả hai thư mục vào một session, chung một tab và chung một `logged_in`. Đổi `testpaths`
+        thành `tests/user tests/ph` không giải quyết gì: vẫn là một session.
+      - **`pages/` không tách theo role**, chỉ tách theo trang. `LoginPage` dùng chung một form cho
+        cả hai; chỉ thêm page object mới khi DOM thật sự khác (dashboard photographer...).
+
+      Lưu ý khi làm:
+      - Tên file test **không được trùng** giữa hai thư mục khi không có `__init__.py`
+        (pytest báo `import file mismatch`). Hoặc đặt tên khác nhau, hoặc thêm `__init__.py`
+        vào cả hai.
+      - Thêm `PH_EMAIL` / `PH_PASSWORD` vào `.env.example`.
+      - Nếu tài khoản photographer đăng nhập bằng Google khác thì cần profile SSO riêng
+        (`AUTOMATION_PROFILE_DIR`), và phải chạy `save_auth.py` một lần cho profile đó — profile
+        mới có cache rỗng nên lần đầu sẽ dính lại vụ `vendor.js` 10.5 MB / ~110s.
 
 - [ ] **`--screenshot` / `--tracing` trong `pytest.ini` không tạo ra artifact nào.** `conftest.py`
       ghi đè `context`/`page` của pytest-playwright nên fixture `new_context` của plugin bị bỏ qua.
       Đang chấp nhận đánh đổi; nếu cần artifact thì phải tự gọi `context.tracing.start/stop`.
 - [ ] `USE_CHROME_PROFILE` trong `.env.example` là **biến chết** — không có code nào đọc. Xóa đi
       hoặc implement nhánh dùng persistent profile.
-- [ ] Fixture đều `scope="session"` ⇒ chạy chung một tab, thứ tự test là load-bearing. Marker
-      `incremental` đã chặn test sau chạy khi test trước fail, nhưng **chạy độc lập một test
-      vẫn không được** (pytest không tự chạy test đứng trước). Nếu cần, chuyển precondition
-      (`goto_profile_page` + `expect_calendar_loaded`) vào một fixture `calendar_ready`.
 - [ ] Chưa chạy được headless / trên CI (`headless=False` hardcode trong `conftest.py`, và luồng
       Google SSO cần thao tác tay). Chỉ làm khi thật sự cần CI.
 
 
 ### DONE
 
-- [x] Bỏ hardcode photographer trong `pages/photographer_profile.py`. Giờ đọc từ env
-      `PHOTOGRAPHER_NAME` (default `bebe`, thiếu biến thì test vẫn chạy như cũ); fixture
-      `photographer_path` dựng ra `/photographers/<slug>` và truyền vào **cả**
-      `PhotographerProfilePage` (để `goto`) lẫn `BookingRequestPage` (để assert URL trang private
-      offer) ⇒ slug chỉ viết một lần cho cả suite. `PATH`/`PATH_PATTERN` ở cấp class bị bỏ, thay
-      bằng `self.path` / `self.path_pattern`.
-      - **Env phải đọc trong `conftest.py`, không đọc trong thân class của page object.**
-        `conftest` `import pages...` **trước** khi gọi `load_dotenv()`, nên `os.getenv` trong thân
-        class chạy lúc `.env` chưa được nạp — nó chỉ thấy biến set sẵn trong shell và âm thầm rơi
-        về default. Đây là lý do `PHOTOGRAPHER_NAME` được đọc trong `conftest.py` chứ không nằm
-        trong page object.
-      - Constant `PATH` cấp class (và comment đi kèm đã lệch với code) bị xoá.
-      Verify: `pytest` 5/5 pass với default. Override thật cũng đã kiểm —
-      `PHOTOGRAPHER_NAME=zzz-no-such-photographer pytest ...::test_01` fail vì trang trả về error
-      page của Rails, chứng minh biến env thật sự đi vào URL chứ không bị bỏ qua.
+- [x] **遠方出張料 (phí di chuyển xa) hiển thị và được cộng vào tổng.** `TC_05_long_distance_fee_in_payment_table`:
+      chọn genre → `select_filming_location()` → gate `has_long_distance_fee_warning()` (không có
+      cảnh báo thì `skip`, vì địa điểm không phát sinh phí là dữ liệu hợp lệ) →
+      `expect_long_distance_fee_charged()` (dòng `遠方出張料` có, tiền > 0) →
+      `expect_payment_table_matches_selection()` lo phần tổng. Gộp `_get_option_price` thành
+      `_price_cell(label)` một tham số, lọc theo nhãn `th`, không lọc theo class của `tr`.
+      Kế hoạch + lý do ở `plan/booking-price-check.md`.
+      **Verify:** cả suite 9/9 pass (2 run), `TC_05` chạy thật chứ không `SKIPPED` (`-rs` không có
+      dòng skip nào) ⇒ locator cảnh báo `longDistanceFee` là thật. Hướng âm: đổi nhãn thành
+      `遠方出張料X` ⇒ fail đúng ở `booking_request.py:192`, không phải skip. Số đọc được lúc fail:
+      `撮影料金 ¥24,200 + 遠方出張料 ¥3,000 = 合計 ¥27,200` ⇒ phí đi xa nằm trong tổng.
 
-- [x] Assert URL trang đích sau khi bấm slot (`expect_selected_slot_in_url()` trong
-      `pages/booking_request.py`). Pattern thật đã xác nhận trên staging — không phải
-      `/reservations/` như phỏng đoán cũ:
-      `{base_url}/photographers/<slug>/private_offers/new?shooting_date=2026-10-03&shooting_time=08:00`.
-      - Ngày/giờ của slot nằm ngay trong query string nên URL khẳng định được cả "đúng trang" lẫn
-        "app nhận đúng ô vừa bấm". Việc này **trùng** với `expect_available_slot()` (trang đích
-        render text ngày/giờ từ chính hai param này) — trùng có ý, đổi lại thông báo lỗi chỉ
-        đúng ngày/giờ sai thay vì `element(s) not found` sau 30s.
-      - Path lấy từ fixture `photographer_path` (`self.path_pattern`), không hardcode slug lần
-        thứ hai ⇒ đổi photographer chỉ sửa một chỗ, và assert bắt luôn trường hợp nhảy sang
-        photographer khác.
-      - Không neo `$` ở cuối regex: app có thể thêm param mới.
-      - `test_03` gọi `expect_selected_slot_in_url()` **trước** `expect_available_slot()`; thứ tự là
-        load-bearing.
-      Verify: `pytest` 5/5 pass. Kiểm cả nhánh phủ định — tạm đổi `path_pattern` thành
-      `private_offer_x` thì `test_03` fail đúng ở dòng `expect_selected_slot_in_url()`, và URL actual in ra
-      xác nhận `:` trong `shooting_time=08:00` **không** bị percent-encode, thứ tự param là
-      `shooting_date` rồi `shooting_time`.
-
-- [x] Lưu session Google SSO một lần bằng `scripts/save_auth.py` → `.auth/storage_state.json`.
-- [x] Fixture `logged_in`: đăng nhập qua form một lần cho cả session, short-circuit nếu test đăng nhập chạy trước đã login rồi.
-- [x] Bỏ heuristic "không thấy link ログイン tức là đã login" — suỷ luận phủ định này sai
-      âm thầm: header đổi class/text là locator không match, `is_visible()` trả `False`, và
-      test báo "đã login" trong khi chưa. Giờ neo vào `logged_in_marker` =
-      `//a[@href='/users/sign_out' and @data-ga-label='sign-out']` — link ログアウト mà server
-      chỉ render khi đã đăng nhập. Tách làm ba vì một hàm không gánh được cả hai vai:
-      - `is_logged_in()` — probe rẻ cho fixture ngắn mạch, dùng `count() > 0`, không retry.
-        Dùng `expect()` ở đây thì lúc chưa login phải chờ hết 30s mới biết, mà đó là
-        trường hợp bình thường. Cũng không dùng `is_visible()`: header render hai lần
-        (desktop + hamburger) và bản desktop nằm trong dropdown ẩn nên `visible=false`.
-      - `expect_logged_in()` — assert có retry (`to_be_attached()` trên `.first`), dùng trong
-        fixture `logged_in` và test.
-      - `expect_login_success()` — assert hành vi ngay sau submit: URL tự về home
-        (`re.compile(rf"^{re.escape(base_url)}/?$")`) + `div.globalNotice > p.globalNotice__description`
-        có text `ログインに成功しました`. Chỉ test dùng, không đưa vào fixture vì thông báo chỉ hiện một lần.
-      Verify: `pytest` — 5/5 pass; chạy riêng `tests/test_photographer_profile.py` setup 10.6s
-      (không treo 30s) xác nhận nhánh probe-chưa-login vẫn nhanh.
-- [x] ~~Gom timeout về một chỗ trong fixture `page` (`DEFAULT_TIMEOUT_MS`)~~ — **đã revert**.
-      Hai dòng `set_default_timeout` / `set_default_navigation_timeout` chỉ set lại đúng default
-      30s của Playwright, và không ai tune biến env này. Xoá cả `DEFAULT_TIMEOUT_MS` lẫn
-      `expect.set_options`; giờ dùng thẳng default của Playwright (30s action/navigation, 5s
-      `expect`). Verify: 3 run liên tiếp 5/5 pass, không flake vì `expect` 5s.
-- [x] `browser_context` chuyển từ `new_context(storage_state=...)` sang `launch_persistent_context`
-      trên `.auth/chrome-profile` (dùng chung với `save_auth.py`).
-      Lý do: `assets/bundle/vendor.js` nặng **10.5 MB, server không gzip**, lại là blocking script
-      trong `<head>`. Context cache rỗng phải tải lại mỗi run → DOMContentLoaded **110s**, quá 30s
-      timeout của `goto`, cả suite fail ngay `page.goto` đầu tiên. Profile giữ disk cache → **1.8s**.
-      Đo thêm để loại trừ: chặn hết analytics không giúp gì (93s vs 100s); `wait_until="commit"`
-      cũng không (goto 0.8s nhưng header 113s mới attach, vì bundle chặn parser).
-      Kèm theo: xoá cookie `_session_id` lúc mở context — profile giữ cookie giữa các run nên run
-      thứ hai vào thẳng trạng thái đã đăng nhập và `test_01_login_form_is_displayed` fail. Cookie
-      `AWSELBAuthSessionCookie-*` của cổng SSO phải giữ.
-      Verify: 5/5 pass, 3 run liên tiếp, ~11s/run (trước đó fail sau 93s).
-      Còn lại: CI/headless vẫn ăn ~110s ở lần chạy đầu vì cache rỗng — gốc rễ là app serve 10.5 MB
-      không nén, nên report cho dev.
-- [x] `scripts/check.py`: `pytest --setup-plan` + `pyright` trong một lệnh, bắt lỗi sai tên fixture và sai kiểu mà không cần mở browser.
-- [x] Cập nhật lại `README.md` cho khớp code hiện tại (tên file page object, bỏ bước
-      `playwright install`, thêm `scripts/check.py`, xoá mục "Ghi chú dọn
-      dẹp" đã sai).
-- [x] Đọc ngày/giờ của slot từ chính ô được bấm (`BookingSlot`) thay vì hardcode ngày.
-- [x] `pages/booking_request.py` hết là stub: locator thật
-      (`//div[@id='app']//div[@class='shootingDateTimeControl__details']`) và `expect_slot` khớp
-      format thật của trang đích — ngày `2026/09/16` (zero-pad) và khoảng giờ `08:00 - 09:00`
-      (giờ đã chọn + 1 tiếng). Assert cả giờ bắt đầu lẫn kết thúc nên không false-pass khi
-      click sai ô.
-- [x] `test_03_select_first_available_slot` chạy pass trên browser thật: locator
-      `shootingDateTimeControl__details` và giả định `SHOOTING_DURATION = 1h` đã được xác nhận,
-      không còn là suy đoán.
-- [x] Marker `incremental` (hook trong `tests/conftest.py` + đăng ký trong `pytest.ini`):
-      test sau tự skip kèm lý do khi test trước trong cùng file fail, thay vì fail dây chuyền
-      với lỗi khó đọc. Bật cho `tests/test_photographer_profile.py` bằng `pytestmark`.
-- [x] Calendar tự bấm 次週 tìm tuần có slot trống (`goto_next_week()` +
-      `goto_week_with_available_date()`, `MAX_WEEKS = 4`), locator `//li[@class='next']/a`.
-      Hai chỗ suýt sai đã sửa và verify trên staging:
-      - Gate chờ render **không** dùng được `expect(...).not_to_have_text(...)`: lúc Vue render
-        lại, `td` biến mất trong chốc lát và assert phủ định coi "không có element" là thoả nên
-        pass sớm, đọc ngay sau đó vẫn ra tuần cũ. Thay bằng `page.wait_for_function` đòi ô ngày
-        đầu vừa tồn tại vừa khác giá trị cũ (`_FIRST_DAY_CHANGED`, viết gọn bằng
-        `?.innerText.trim() ?? old` để `td` chưa render bị coi là "chưa đổi").
-      - Tuần vắt qua hai tháng có **hai** `th[@colspan]` (`colspan=3` "2026/09" + `colspan=4`
-        "2026/10") ⇒ `_read_year_month()` cũ vỡ vì strict mode, và nếu không vỡ cũng gán sai
-        tháng cho 4 cột cuối. Giờ nhận `column` và cộng dồn colspan để tra đúng ô.
-      Verify: tuần đầu 0 slot → bấm 3 lần → chọn ô 2026/10/03 08:00, trang booking khớp.
-      Chạy lại pass sau khi rút gọn `_FIRST_DAY_CHANGED`.
+- [x] Giá tiền trang đặt lịch, cả hai nhánh (không/có option): `read_option_cards()`,
+      `read_subtotal()`, `expect_total()`, `expect_payment_table_matches_selection()`. Locator
+      thuần, đã xoá 2 hằng JS `evaluate_all`. Kỳ vọng tính từ giá đọc trên trang, không hardcode.
+      Verify 3/3 pass staging.
+- [x] Precondition trang private offer vào fixture `selected_slot` (session scope) ⇒
+      `test_user_03` chạy lẻ được; `test_user_02::TC_02` thì chưa.
+- [x] Bỏ hardcode photographer → env `PHOTOGRAPHER_NAME` + fixture `photographer_path`, dùng chung
+      cho cả hai page object. Env phải đọc trong `conftest.py`, không đọc trong thân class.
+- [x] `expect_selected_slot_in_url()` — assert path + `shooting_date`/`shooting_time` trong query.
+      Pattern đã confirm trên staging (không phải `/reservations/`).
+- [x] `scripts/save_auth.py` — lưu session Google SSO một lần.
+- [x] Fixture `logged_in` — login qua form một lần cho cả session, short-circuit nếu đã login.
+- [x] Bỏ heuristic "không thấy ログイン tức là đã login" (sai âm thầm). Neo vào `logged_in_marker`,
+      tách 3 hàm: `is_logged_in()` (probe rẻ, `count()`), `expect_logged_in()` (retry),
+      `expect_login_success()` (chỉ test dùng — notice chỉ hiện một lần).
+- [x] ~~`DEFAULT_TIMEOUT_MS`~~ — revert, chỉ set lại đúng default 30s sẵn có của Playwright.
+- [x] `browser_context` → `launch_persistent_context` trên `.auth/chrome-profile`: `vendor.js`
+      10.5 MB không nén, cache rỗng ⇒ DOMContentLoaded 110s, cả suite fail; có cache 1.8s.
+      Kèm xoá cookie `_session_id` mỗi run (phải giữ `AWSELBAuthSessionCookie-*`).
+- [x] `scripts/check.py` — `--setup-plan` + `pyright` trong một lệnh.
+- [x] Cập nhật `README.md` khớp code hiện tại.
+- [x] Đọc ngày/giờ slot từ chính ô được bấm (`BookingSlot`), không hardcode ngày.
+- [x] `pages/booking_request.py` hết stub — `expect_available_slot()` khớp format thật: ngày
+      `2026/09/16` + khoảng giờ `08:00 - 09:00`.
+- [x] Slot click pass trên browser thật — `SHOOTING_DURATION = 1h` đã xác nhận.
+- [x] Marker `incremental` — test sau tự skip khi test trước cùng file fail.
+- [x] Calendar tự bấm 次週 tìm tuần có slot trống. Gate chờ render phải là `wait_for_function`
+      (`not_to_have_text` pass sớm lúc Vue detach `td`); tuần vắt hai tháng có 2 `th[@colspan]`
+      nên `_read_year_month()` phải cộng dồn colspan.
