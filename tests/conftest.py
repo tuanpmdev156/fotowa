@@ -85,15 +85,16 @@ def context(browser_context: BrowserContext) -> BrowserContext:
     return browser_context
 
 
-# Scope = session: dùng một tab cho các test cases
-@pytest.fixture(scope="session")
+# Scope = function: mỗi test một tab mới, bắt đầu từ `about:blank` sạch.
+# Đổi lại, mỗi test phải tự `goto_*` tới trang nó cần — không ăn ké trang test trước để lại.
+@pytest.fixture
 def page(context: BrowserContext) -> Iterator[Page]:
     page = context.new_page()
     yield page
     page.close()
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def login_page(page: Page, base_url: str) -> LoginPage:
     return LoginPage(page, base_url)
 
@@ -133,7 +134,7 @@ def photographer_path() -> str:
 
 
 # Phụ thuộc `logged_in` state: page object chỉ được tạo sau khi đăng nhập xong.
-@pytest.fixture(scope="session")
+@pytest.fixture
 def photographer_profile_page(
     page: Page, base_url: str, photographer_path: str, logged_in: None
 ) -> PhotographerProfilePage:
@@ -141,7 +142,7 @@ def photographer_profile_page(
 
 
 # Không cần `logged_in`: ta tới trang này bằng click từ calendar, luôn chạy sau khi đã đăng nhập.
-@pytest.fixture(scope="session")
+@pytest.fixture
 def booking_request_page(
     page: Page, base_url: str, photographer_path: str
 ) -> BookingRequestPage:

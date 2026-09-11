@@ -17,7 +17,6 @@ def TC_01_selected_slot_is_displayed(
 
 def TC_02_no_option_in_payment_table(booking_request_page: BookingRequestPage):
     """Chưa tick option nào."""
-    #booking_request_page.select_first_genre()
     booking_request_page.expect_payment_table_loaded()
     booking_request_page.expect_options_loaded()
     booking_request_page.expect_no_option_selected()

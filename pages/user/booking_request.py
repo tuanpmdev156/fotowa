@@ -40,6 +40,7 @@ class BookingRequestPage:
     def __init__(self, page: Page, base_url: str, photographer_path: str):
         self.page = page
         self.base_url = base_url
+        self.photographer_path = photographer_path
         self.path_pattern = rf"{re.escape(photographer_path)}/private_offers/new"
         # Selected slot datetime
         self.selected_datetime = page.locator("//div[@id='app']//div[@class='shootingDateTimeControl__details']")
@@ -68,6 +69,20 @@ class BookingRequestPage:
 
         # Submit button
         self.confirm_booking_button = page.locator("//button[@type='submit']")
+
+    # --- Navigation ---
+
+    def goto_booking_request(self, slot: BookingSlot):
+        """Vào thẳng trang private offer theo slot, không đi vòng qua calendar.
+
+        Shape URL lấy từ chính `expect_selected_slot_in_url`.
+        """
+        self.page.goto(
+            f"{self.base_url}{self.photographer_path}/private_offers/new"
+            f"?shooting_date={slot.year}-{slot.month:02d}-{slot.day:02d}"
+            f"&shooting_time={slot.time}"
+        )
+
     # --- Actions ---
 
     def select_first_genre(self):
