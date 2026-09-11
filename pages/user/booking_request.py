@@ -7,7 +7,7 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from pages.user.photographer_profile import BookingSlot
 
-# Một buổi chụp mặc định dài 1 tiếng, nên trang đích hiển thị "giờ đã chọn - giờ đã chọn + 1h"
+# Một buổi chụp mặc định dài 1 tiếng
 SHOOTING_DURATION = timedelta(hours=1)
 
 

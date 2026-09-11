@@ -68,12 +68,6 @@ def browser_context(playwright_instance: Playwright) -> Iterator[BrowserContext]
         channel="chrome",
         headless=False,
     )
-    # Profile giữ luôn cookie, nên lần chạy sau sẽ vào thẳng trạng thái đã đăng nhập và
-    # `test_01_login_form_is_displayed` không thấy form. Xoá cookie login của app để mỗi lần
-    # chạy đều bắt đầu từ chưa đăng nhập. Cookie SSO (`AWSELBAuthSessionCookie-*`) giữ nguyên,
-    # xoá là kẹt lại ở Google.
-    context.clear_cookies(name=APP_SESSION_COOKIE)
-
     yield context
     context.close()
 
@@ -109,13 +103,11 @@ def credentials() -> tuple[str, str]:
     return email, password
 
 
-@pytest.fixture(scope="session")
-def logged_in(login_page: LoginPage, credentials: tuple[str, str]) -> None:
-    """Đảm bảo đã đăng nhập app fotowa trước khi truy cập các trang khác.
+def _sign_in(login_page: LoginPage, credentials: tuple[str, str]) -> None:
+    """Đăng nhập app fotowa; đã đăng nhập rồi thì không làm lại.
 
-    Fixture này đăng nhập qua form một lần cho cả session. Nếu test đăng nhập chạy
-    trước đã login rồi thì không làm lại.
-
+    Là hàm thường chứ không phải fixture, để fixture ở scope nào cũng gọi được —
+    cookie nằm ở `context` dùng chung nên đăng nhập trên tab nào thì mọi tab đều thấy.
     """
     login_page.goto_home_page()
     if login_page.is_logged_in():
@@ -125,6 +117,23 @@ def logged_in(login_page: LoginPage, credentials: tuple[str, str]) -> None:
     login_page.expect_login_form_loaded()
     login_page.login(*credentials)
     login_page.expect_logged_in()
+
+
+@pytest.fixture
+def logged_in(login_page: LoginPage, credentials: tuple[str, str]) -> None:
+    """Đảm bảo đã đăng nhập app fotowa trước khi truy cập các trang khác."""
+    _sign_in(login_page, credentials)
+
+
+@pytest.fixture
+def logged_out(context: BrowserContext) -> None:
+    """Đảm bảo CHƯA đăng nhập — dành cho test form login.
+
+    Profile giữ luôn cookie nên lần chạy sau sẽ vào thẳng trạng thái đã đăng nhập và test không
+    thấy form. Chỉ xoá cookie session của app; cookie SSO (`AWSELBAuthSessionCookie-*`) phải giữ
+    nguyên, xoá là kẹt lại ở Google.
+    """
+    context.clear_cookies(name=APP_SESSION_COOKIE)
 
 
 @pytest.fixture(scope="session")
@@ -149,33 +158,39 @@ def booking_request_page(
     return BookingRequestPage(page, base_url, photographer_path)
 
 
-# Precondition của mọi test trên trang private offer: đã bấm một slot trống trên calendar.
-# Đặt ở fixture (không phải ở test) để `tests/test_03_booking_request.py` không phụ thuộc vào việc
-# file test khác đã chạy trước hay chưa — pytest chỉ giải quyết thứ tự cho fixture, không cho test.
+def _find_first_available_slot(profile: PhotographerProfilePage) -> BookingSlot:
+    """Mở profile, tìm tuần có lịch trống, bấm ô trống đầu tiên. Trả về ngày/giờ của chính ô đó."""
+    profile.goto_profile_page()
+    profile.expect_calendar_loaded()
+    profile.goto_week_with_available_date()
+    return profile.select_first_available_slot()
+
+
 @pytest.fixture(scope="session")
+def available_slot(
+    context: BrowserContext,
+    base_url: str,
+    photographer_path: str,
+    credentials: tuple[str, str],
+) -> BookingSlot:
+    """Ngày/giờ của một slot còn trống — **chỉ là dữ liệu**, không để lại state trên tab nào.
+
+    Tự mở một tab riêng, tìm xong thì đóng lại, nên không test nào ăn ké được vị trí browser.
+    Test cần trang private offer thì tự gọi `goto_booking_request(available_slot)`.
+    """
+    scratch = context.new_page()
+    try:
+        _sign_in(LoginPage(scratch, base_url), credentials)
+        return _find_first_available_slot(
+            PhotographerProfilePage(scratch, base_url, photographer_path)
+        )
+    finally:
+        scratch.close()
+
+
+# Khác `available_slot` ở chỗ: fixture này đi **đường click thật** và để browser đứng lại ở trang
+# đích. Chỉ dành cho test kiểm tra chính hành vi click (bấm ô → sang đúng URL).
+@pytest.fixture
 def selected_slot(photographer_profile_page: PhotographerProfilePage) -> BookingSlot:
-    """Chọn slot trống đầu tiên một lần cho cả session, trả về ngày/giờ của chính ô đó."""
-    photographer_profile_page.goto_profile_page()
-    photographer_profile_page.expect_calendar_loaded()
-    photographer_profile_page.goto_week_with_available_date()
-    return photographer_profile_page.select_first_available_slot()
-
-
-# --- Test chạy nối tiếp trên cùng một tab: test sau bị skip nếu test trước fail ---
-# Đánh dấu bằng `pytestmark = pytest.mark.incremental` ở đầu file test.
-_failed_in_module: dict[str, str] = {}
-
-
-def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo[None]) -> None:
-    if "incremental" not in item.keywords:
-        return
-    if call.excinfo is not None and call.excinfo.typename != "Skipped":
-        _failed_in_module.setdefault(item.module.__name__, item.name)  # type: ignore[attr-defined]
-
-
-def pytest_runtest_setup(item: pytest.Item) -> None:
-    if "incremental" not in item.keywords:
-        return
-    failed = _failed_in_module.get(item.module.__name__)  # type: ignore[attr-defined]
-    if failed is not None:
-        pytest.skip(f"test trước đó đã fail: {failed}")
+    """Bấm slot trống đầu tiên trên calendar, trả về ngày/giờ của chính ô đó."""
+    return _find_first_available_slot(photographer_profile_page)
