@@ -1,7 +1,7 @@
 import pytest
 
-from pages.booking_request import BookingRequestPage
-from pages.photographer_profile import BookingSlot
+from pages.user.booking_request import BookingRequestPage
+from pages.user.photographer_profile import BookingSlot
 
 # Các test dùng chung một tab và chạy theo thứ tự khai báo: test sau bị skip nếu test trước fail.
 pytestmark = pytest.mark.incremental

@@ -1,8 +1,11 @@
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from pages.photographer_profile import BookingSlot
-from playwright.sync_api import Locator, Page, TimeoutError as PlaywrightTimeoutError, expect
+
+from playwright.sync_api import Locator, Page, expect
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+
+from pages.user.photographer_profile import BookingSlot
 
 # Một buổi chụp mặc định dài 1 tiếng, nên trang đích hiển thị "giờ đã chọn - giờ đã chọn + 1h"
 SHOOTING_DURATION = timedelta(hours=1)
@@ -42,9 +45,11 @@ class BookingRequestPage:
         self.selected_datetime = page.locator("//div[@id='app']//div[@class='shootingDateTimeControl__details']")
         # Genre
         self.genre_selection_button = page.locator("//button[@id='private_offer_creation_form_genre_id']")
+        # `:visible` là pseudo-class của CSS, XPath không có — lọc bằng `.filter(visible=True)`.
         self.genre_options = page.locator(
-            'div.genreOption[data-genre-id]:not([data-genre-id=""]):visible'
-        )
+            "//div[contains(@class,'genreOption')][@data-genre-id]"
+            "[not(@data-genre-id='')]"
+        ).filter(visible=True)
         # Filming location
         self.filming_location = page.locator("//input[@id='private_offer_creation_form_spot_name']")
         self.filming_location_suggestion_button = page.locator("//button[@class='spotControlBtn']")
@@ -56,7 +61,7 @@ class BookingRequestPage:
         # Các dòng giá tiền trừ dòng Total(合計).
         self.subtotal_prices = self.payment_table.locator(
             "//tbody/tr[not(@class='total')]/td[contains(@class,'privateOffers__price')]"
-        ) 
+        )
         # Các option đang tick.
         self.option_rows = self.payment_table.locator("//tbody/tr[@class='option_item']")
         self.total_price = self.payment_table.locator("//tr[@class='total']//td[@class='privateOffers__price']")
@@ -117,7 +122,9 @@ class BookingRequestPage:
 
     def _option_card(self, label: str) -> Locator:
         return self.option_cards.filter(
-            has=self.page.locator(".shootingOptionControl__title span", has_text=label)
+            has=self.page.locator(
+                "//*[contains(@class,'shootingOptionControl__title')]//span", has_text=label
+            )
         )
 
     def _price_cell(self, label: str) -> Locator:

@@ -1,4 +1,4 @@
-from pages.login import LoginPage
+from pages.user.login import LoginPage
 
 
 def TC_01_login_form_is_displayed(login_page: LoginPage):

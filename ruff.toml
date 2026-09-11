@@ -1,0 +1,13 @@
+# Lint style/code chết — bổ sung cho pyright (pyright chỉ bắt kiểu, không bắt style).
+# Chỉ dùng `ruff check`, không dùng `ruff format`, để tránh diff lớn toàn repo.
+line-length = 100
+target-version = "py313"
+extend-exclude = [".venv", ".auth", "fixtures"]
+
+[lint]
+# E/W: pycodestyle (PEP 8)  F: pyflakes (biến/import chết)  I: isort (thứ tự import)
+select = ["E", "W", "F", "I"]
+
+[lint.isort]
+# `pages` là package trong repo, tách khỏi block third-party (pytest, playwright).
+known-first-party = ["pages"]

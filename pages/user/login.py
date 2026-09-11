@@ -34,7 +34,7 @@ class LoginPage:
         self.email_input.fill(email)
 
     def fill_password(self, password: str):
-        self.password_input.fill(password)        
+        self.password_input.fill(password)
 
     def login(self, email: str, password: str):
         self.fill_email(email)

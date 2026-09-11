@@ -18,7 +18,7 @@ AUTH_DIR = Path(os.getenv("AUTH_DIR", ROOT / ".auth"))
 
 AUTH_STATE = Path(os.getenv("AUTH_STATE", AUTH_DIR / "storage_state.json"))
 
-PROFILE_DIR = Path(os.getenv("AUTOMATION_PROFILE_DIR", 
+PROFILE_DIR = Path(os.getenv("AUTOMATION_PROFILE_DIR",
 AUTH_DIR / "chrome-profile"))
 
 BASE_URL: str = os.getenv("BASE_URL", "")

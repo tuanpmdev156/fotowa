@@ -11,9 +11,9 @@ from playwright.sync_api import (
     sync_playwright,
 )
 
-from pages.booking_request import BookingRequestPage
-from pages.login import LoginPage
-from pages.photographer_profile import BookingSlot, PhotographerProfilePage
+from pages.user.booking_request import BookingRequestPage
+from pages.user.login import LoginPage
+from pages.user.photographer_profile import BookingSlot, PhotographerProfilePage
 
 ROOT = Path(__file__).resolve().parent.parent
 

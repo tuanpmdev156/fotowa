@@ -1,6 +1,6 @@
 import pytest
 
-from pages.photographer_profile import PhotographerProfilePage
+from pages.user.photographer_profile import PhotographerProfilePage
 
 # Các test dùng chung một tab và chạy theo thứ tự khai báo: test sau bị skip nếu test trước fail.
 pytestmark = pytest.mark.incremental

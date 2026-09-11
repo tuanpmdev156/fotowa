@@ -21,7 +21,7 @@ class PhotographerProfilePage:
 
     # Calendar chỉ hiện 7 ngày.
     # Khi kín lịch bấm 次週 để tìm lịch trống, tối đa MAX_WEEKS lần,nếu vẫn kín lịch sau đó thì fail.
-    
+
     MAX_WEEKS = 10
 
     def __init__(self, page: Page, base_url: str, photographer_path: str):
@@ -44,7 +44,7 @@ class PhotographerProfilePage:
         self.time_slots = self.calendar.locator("//table[@class='time']//td")
         self.available_dates = self.calendar.locator("//td[@class='available']")
 
-        
+
 
     # --- Navigation ---
 
@@ -96,7 +96,7 @@ class PhotographerProfilePage:
 
     def _read_slot(self, column: int, row: int) -> BookingSlot:
         year, month = self._read_year_month(column)
-        day = self.day_headers.nth(column).locator("xpath=./span").inner_text()
+        day = self.day_headers.nth(column).locator("//span").inner_text()
         return BookingSlot(
             year=year,
             month=month,
