@@ -10,28 +10,29 @@ Python 3.13, venv at `.venv` (native Windows CPython — never reuse a Linux ven
 Browser: **installed Google Chrome** via `channel="chrome"`, `headless=False`. Env manager: `uv`.
 
 ```powershell
-.venv\Scripts\python.exe -m pytest                       # 9 tests, ~20s
+.venv\Scripts\python.exe -m pytest                       # 9 tests, ~50s
 .venv\Scripts\python.exe -m pytest -rs                   # -rs: make skips visible
 .venv\Scripts\python.exe -m pytest tests/test_user_01_login.py::TC_01_login_form_is_displayed
 .venv\Scripts\python.exe scripts\check.py                # static gates, no browser
 ```
 
-`pytest.ini`: `-v --browser chromium --screenshot only-on-failure --tracing retain-on-failure`,
-`testpaths = tests`, `pythonpath = .`, `markers` (registers `incremental`), and
+`pytest.ini`: `-v --browser chromium --screenshot only-on-failure`,
+`testpaths = tests`, `pythonpath = .`, and
 **`python_functions = TC_* test_*`** — tests are named by test-case id (`TC_01_...`); drop that
 line and pytest collects nothing.
 
-`scripts/check.py` = `pytest --setup-plan -q` (resolves every fixture without a browser — the only
-way to catch a misspelled fixture name) + `pyright` (basic mode over `pages`, `tests`, `scripts`).
-Run it before any browser run.
+`scripts/check.py` = two static gates, no browser: `pytest --setup-plan -q` (resolves every
+fixture — the only way to catch a misspelled fixture name) and `pyright` (basic mode over `pages`,
+`tests`, `scripts`). Run it before any browser run. There is no linter — ruff was removed from the
+project; do not reintroduce one without being asked.
 
 ## Layout
 
 ```
-pages/login.py                              LoginPage
-pages/photographer_profile.py               PhotographerProfilePage + BookingSlot (calendar)
-pages/booking_request.py                    BookingRequestPage + ShootingOption (private-offer form)
-tests/conftest.py                           dotenv, session fixtures, `logged_in`, `selected_slot`
+pages/user/login.py                         LoginPage
+pages/user/photographer_profile.py          PhotographerProfilePage + BookingSlot (calendar)
+pages/user/booking_request.py               BookingRequestPage + ShootingOption (private-offer form)
+tests/conftest.py                           dotenv, fixtures, `_sign_in`, `_find_first_available_slot`
 tests/test_user_01_login.py                 2 tests
 tests/test_user_02_photographer_profile.py  2 tests
 tests/test_user_03_booking_request.py       5 tests (slot echo, payment table, long-distance fee)
@@ -40,6 +41,7 @@ scripts/check.py                            --setup-plan + pyright
 fixtures/*.html                             Saved DOM for writing XPath offline — numbers are stale
 plan/booking-price-check.md                 Write-up of the payment/fee verification work
 plan/booking-confirm-payment.md             Plan for the review + payment page (blocked on its DOM)
+plan/independent-tests.md                   Write-up of the test-independence work (steps 1-6 done)
 .env.example                                Committed; `.env` and `.auth/` are gitignored
 ```
 
@@ -52,22 +54,26 @@ Two separate gates:
    (`.auth/chrome-profile`). It also writes `.auth/storage_state.json`, which **nothing reads** —
    `conftest.browser_context` uses `launch_persistent_context` on that same profile, so the SSO
    cookies are already in it.
-2. **App login** at `/users/sign_in` — a normal email/password form the tests drive. The
-   `logged_in` fixture runs once per session: `goto_home_page()` → short-circuit if
-   `is_logged_in()` → otherwise `goto_login_page()` → `login()` → `expect_logged_in()`.
+2. **App login** at `/users/sign_in` — a normal email/password form the tests drive. `_sign_in()`
+   (a plain function, not a fixture, so any scope can call it): `goto_home_page()` → short-circuit
+   if `is_logged_in()` → otherwise `goto_login_page()` → `login()` → `expect_logged_in()`. The
+   `logged_in` fixture is a one-line wrapper. Cookies live on the shared `context`, so signing in
+   on any tab logs in every tab — that is what keeps the per-test short-circuit cheap.
 
 **Why a persistent profile instead of `new_context(storage_state=...)`:** `assets/bundle/vendor.js`
 is 10.5 MB served uncompressed and blocks the parser. Cold cache ⇒ DOMContentLoaded ~110s ⇒ every
 run failed on the first `goto`. Warm profile cache ⇒ 1.8s. (A separate profile, not the real one:
 Chrome 136+ refuses remote debugging on the default user-data-dir.)
 
-The profile keeps cookies too, so `browser_context` clears exactly one at session start:
-`_session_id` (the Rails app session). Without it run 2 starts logged in and
-`TC_01_login_form_is_displayed` finds no form. `AWSELBAuthSessionCookie-0`/`-1` is the SSO door and
-**must survive** — clearing all cookies strands the run on Google.
+The profile keeps cookies too, so a run would otherwise start already logged in and
+`TC_01_login_form_is_displayed` would find no form. The **`logged_out` fixture** clears exactly one
+cookie — `_session_id` (the Rails app session) — and the two login tests request it by name.
+`AWSELBAuthSessionCookie-0`/`-1` is the SSO door and **must survive**; clearing all cookies strands
+the run on Google. (This used to be an unconditional clear inside `browser_context`, which silently
+handed the first-collected test a logged-out browser. Now the requirement is in the signature.)
 
-Side effect: `launch_persistent_context` opens its own blank tab; the `page` fixture adds the tab
-the tests actually use.
+Side effect: `launch_persistent_context` opens its own blank tab; the `page` fixture adds a fresh
+tab per test.
 
 ## Environment variables
 
@@ -87,42 +93,61 @@ Loaded from `.env` by `conftest.py` and `save_auth.py`; real shell vars win.
 - No timeout env var: Playwright defaults (30s action/navigation, 5s `expect`).
 - `USE_CHROME_PROFILE` in `.env.example` is **dead** — no code reads it.
 
-## Fixtures (all `scope="session"`, `tests/conftest.py`)
+## Fixtures (`tests/conftest.py`)
+
+**session** (expensive, no per-test state): `base_url`, `playwright_instance`, `browser_context`,
+`context`, `credentials`, `photographer_path`, `available_slot`.
+**function** (anything holding a `page`): `page`, `login_page`, `logged_in`, `logged_out`,
+`photographer_profile_page`, `booking_request_page`, `selected_slot`.
 
 ```
-base_url → playwright_instance → browser_context → context → page
-                                                               ↓
-        login_page ──→ credentials ──→ logged_in ──→ photographer_profile_page
-                                     photographer_path ──↗     │       booking_request_page
-                                                               ↓       (no logged_in dep)
-                                                          selected_slot
+context ──→ page ──→ login_page ──→ logged_in ──→ photographer_profile_page ──→ selected_slot
+   │           │                                  booking_request_page (no logged_in dep)
+   │           └──→ logged_out  (login tests only)
+   └──→ available_slot   (opens and closes its own scratch tab; returns data only)
 ```
 
-`booking_request_page` needs no `logged_in`: that page is reached by clicking a calendar slot.
-`selected_slot` is the precondition for all of `test_user_03`: profile → calendar →
-`goto_week_with_available_date` → `select_first_available_slot`, once per session, returning the
-`BookingSlot` the tests assert against.
+The scope rule is not a preference: a session-scoped fixture cannot request a function-scoped one
+(`ScopeMismatch`), so `page → function` forces every page-object fixture to follow.
+
+**`available_slot` vs `selected_slot` — they look alike and are not.**
+- `available_slot` (session) is **data**: it opens a scratch tab, signs in, runs
+  `_find_first_available_slot`, closes the tab, and returns a frozen `BookingSlot`. It leaves no
+  browser state, so nothing can free-ride on it. Tests that need the private-offer page call
+  `goto_booking_request(available_slot)` — direct URL, no calendar walk.
+- `selected_slot` (function) goes through the **real click path** and leaves the browser on the
+  destination page. Only `test_user_03::TC_01` uses it, because that test is the assertion *about*
+  the click.
 
 ## Conventions that bite if ignored
 
-**One tab, session fixtures, order is load-bearing.**
-- Tests run in declaration order — hence `TC_01_` / `TC_02_` / … Each resumes where the previous
-  one left the browser.
-- Files are collected alphabetically, hence `test_user_01_` / `_02_` / `_03_`. A name that sorts
-  before `test_user_01_login.py` pulls `logged_in` first and breaks the login test. Re-check with
-  `pytest --collect-only -q` after any rename. (The `user` segment anticipates a split by role —
-  see `TODO.md`.)
-- A single test run alone starts at `about:blank`. Only **fixtures** form a dependency graph, not
-  tests — move a precondition into a fixture to make a test standalone.
+**Every test owns its tab and navigates itself.** `page` is function-scoped: each test starts at
+`about:blank`, so the first line of a test is a `goto_*`. Run order no longer means anything — the
+numbers in `TC_01_` / `test_user_01_` are test-case ids, not a contract. Preconditions belong in
+fixtures, never in "whatever the previous test left behind"; only **fixtures** form a dependency
+graph, tests do not.
 
-**`incremental` marker.** Two hooks in `conftest.py` keyed on `_failed_in_module`: after a marked
-test fails, later tests in the same module skip with `test trước đó đã fail: <name>`. `Skipped` is
-filtered out, so neither the `credentials` skip nor `TC_05`'s no-fee skip arms it.
-`test_user_02` and `test_user_03` opt in via `pytestmark = pytest.mark.incremental`.
+Proving it is a separate act from a green suite: run every nodeid on its own.
+
+```powershell
+.venv\Scripts\python.exe -m pytest --collect-only -q -o addopts=   # -o addopts= cancels the -v in pytest.ini
+```
+
+(The suite used to share one session-scoped tab and needed an `incremental` marker to stop the
+cascade. Both are gone — see `plan/independent-tests.md`. Do not reintroduce order coupling.)
 
 **Overridden `context`/`page`.** They inject the authenticated context and bypass the plugin's
-`new_context`, so `--screenshot` / `--tracing` produce **no artifacts**. Accepted trade-off; use
-`pytest --pdb` to inspect a failure live (teardown is deferred, the window stays open).
+`new_context`, which is where pytest-playwright records artifacts — so none of the plugin's own
+capture runs. `conftest` replaces the screenshot half: a `pytest_runtest_makereport` wrapper stashes
+the failure under `_FAILED`, and the `page` fixture calls `_capture_screenshot()` before closing
+the tab, writing a full-page PNG to `<--output>/<nodeid>-{failed,finished}.png` (`test-results/`,
+gitignored). It follows the plugin's own `--screenshot` semantics — `on` shoots every test,
+`only-on-failure` (the `pytest.ini` default) only the failures, `off` nothing.
+**Trace and video are still not produced** — tracing lives on the shared session-scoped context, so
+it would need `start_chunk`/`stop_chunk` per test and `available_slot`'s scratch tab would leak into
+the chunk; `--tracing` is therefore out of `pytest.ini` rather than
+lying. `pytest --pdb` remains the way to inspect a failure live (teardown is deferred, the window
+stays open).
 
 **Page objects: no actions in `__init__`** — lazy locators only, or a fixture burns a 30s timeout
 on `about:blank`. Naming: `goto_*` navigates, `expect_*` asserts, everything else acts.
@@ -130,7 +155,11 @@ on `about:blank`. Naming: `goto_*` navigates, `expect_*` asserts, everything els
 **Strict mode is on** and fotowa renders its header twice (desktop + mobile) — anchor to something
 unique or add `.first`.
 
-**Locators are XPath + Japanese text** (`ログイン`, `遠方出張料`, `ログインに成功しました`).
+**Locators are XPath + Japanese text** (`ログイン`, `遠方出張料`, `ログインに成功しました`) —
+every locator, no CSS. Verified on Chrome: a chained `parent.locator("//x")` **is** scoped to the
+parent, so the `//` prefix is safe. But `:visible` is a CSS-only pseudo-class and raises
+`SyntaxError` on an XPath — use `.filter(visible=True)` (see `genre_options`). `has_text=` and
+`has=` work with XPath unchanged.
 
 **Login state is asserted positively, never by absence.** `logged_in_marker` is the ログアウト link
 (`//a[@href='/users/sign_out' and @data-ga-label='sign-out']`); it matches 2 nodes and the desktop
@@ -161,7 +190,7 @@ hardcoded.
 
 ## Booking request page — current state
 
-Verified green on staging (9/9, repeated runs):
+Verified green on staging: 9/9 in ~50s, **and all nine pass individually** (5.5s-16.3s each).
 
 - **Slot echo.** `expect_selected_slot_in_url(slot)` matches path + `shooting_date` +
   `shooting_time` (`{base}/photographers/<slug>/private_offers/new?shooting_date=2026-10-03&shooting_time=08:00`,
@@ -182,8 +211,7 @@ Verified green on staging (9/9, repeated runs):
 
 Open: submitting the form (`confirm_booking_button` is declared but unused, and
 `//button[@type='submit']` is too broad — anchor it to `確認・決済に進む`), then the review/payment
-page. `TC_05` also fails when run alone (`-k TC_05` times out in `select_first_genre()`) though it
-passes with the file. No invalid-credentials test yet, though `LoginPage.expect_error` exists.
+page. No invalid-credentials test yet, though `LoginPage.expect_error` exists.
 `TODO.md` is the live backlog — keep it in sync.
 
 ## Troubleshooting
@@ -194,8 +222,8 @@ passes with the file. No invalid-credentials test yet, though `LoginPage.expect_
 - **Timeout waiting for the login form** — stranded on Google SSO; re-run `scripts/save_auth.py`.
 - **`Page.goto` times out on the very first test** — cold profile cache, Chrome is re-downloading
   `vendor.js`. Run `save_auth.py` once to warm the same profile.
-- **Run 1 green, run 2 fails on `TC_01_login_form_is_displayed`** — the `_session_id` clear in
-  `browser_context` was lost.
+- **Run 1 green, run 2 fails on `TC_01_login_form_is_displayed`** — the test lost its
+  `logged_out` fixture argument, so the profile's `_session_id` survived from the previous run.
 - **`launch_persistent_context` fails / profile locked** — close every Chrome window using
   `.auth/chrome-profile`.
 - **`TC_05` reports `SKIPPED`** — no fee warning appeared. Either the spot genuinely charges no

@@ -7,11 +7,8 @@ r"""Chạy cả hai kiểm tra tĩnh - gõ một lệnh là xong.
   runtime).
 - `pyright`: bắt sai kiểu và sai tên method/attribute. Cùng engine với Pylance nên
   kết quả khớp y với squiggle trong VSCode.
-- `ruff check`: bắt lỗi style/PEP 8, import sai thứ tự, biến và import chết - những
-  thứ pyright không quan tâm. Chỉ báo lỗi, không tự sửa; thêm `--fix` khi muốn ruff
-  sửa hộ phần an toàn (xem `ruff.toml`).
 
-Exit code khác 0 nếu bất kỳ bước nào thất bại; chạy hết cả ba bước để báo cáo đầy
+Exit code khác 0 nếu bất kỳ bước nào thất bại; chạy hết cả hai bước để báo cáo đầy
 đủ thay vì dừng ở bước đầu.
 """
 
@@ -25,7 +22,6 @@ PYTHON = sys.executable
 STEPS = [
     ("fixtures", [PYTHON, "-m", "pytest", "--setup-plan", "-q"]),
     ("types", [PYTHON, "-m", "pyright"]),
-    ("lint", [PYTHON, "-m", "ruff", "check", "."]),
 ]
 
 

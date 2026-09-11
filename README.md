@@ -55,14 +55,7 @@ notepad .env
 
 Bước 3 mở một cửa sổ Chrome với profile automation riêng (`.auth/chrome-profile`). Bạn hoàn tất
 đăng nhập Google; ngay khi trình duyệt quay về một trang fotowa là xong. Test dùng lại **đúng
-profile đó**, nên có sẵn cookie SSO và — quan trọng không kém — disk cache của Chrome.
-
-Vì sao cần cache: `assets/bundle/vendor.js` của staging nặng 10.5 MB và server không nén, lại là
-blocking script trong `<head>`. Chạy với cache rỗng thì riêng việc mở trang chủ mất ~110s, vượt
-timeout 30s của `goto` và cả suite fail ngay từ test đầu. Dùng lại profile thì còn ~1.8s.
-
-Hệ quả cần nhớ: **đóng mọi cửa sổ Chrome đang mở profile này trước khi chạy test**, nếu không
-`launch_persistent_context` sẽ báo profile bị khoá.
+profile đó**, nên có sẵn cookie SSO
 
 ---
 
@@ -80,32 +73,35 @@ Hệ quả cần nhớ: **đóng mọi cửa sổ Chrome đang mở profile này
 
 # một test case cụ thể
 .venv\Scripts\python.exe -m pytest tests/test_user_01_login.py::TC_01_login_form_is_displayed
+
+# chụp màn hình mọi test, kể cả test pass
+.venv\Scripts\python.exe -m pytest --screenshot on
+
+# chỉ chụp test fail (mặc định của pytest.ini)
+.venv\Scripts\python.exe -m pytest --screenshot only-on-failure
+
+# tắt chụp màn hình 
+.venv\Scripts\python.exe -m pytest --screenshot off
+
+# đổi thư mục chứa ảnh( ví dụ: đổi thành artifacts) (mặc định test-results)
+.venv\Scripts\python.exe -m pytest --output artifacts
 ```
 
-Không cần activate venv. Nếu vẫn muốn gọi `pytest` trực tiếp thì chạy `.\.venv\Scripts\Activate.ps1`
-trước (thoát bằng `deactivate`).
+Ảnh nằm trong `test-results/`, tên ghép từ nodeid: `...-failed.png` khi fail, `...-finished.png`
+khi chụp lúc pass.
 
+
+
+Activate venv
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+Exit venv
+```powershell
+deactivate
+```
 ---
 
-## Những điều cần lưu ý
+## Lưu ý khi viết test
 
-**Có hai lớp đăng nhập.** Cổng vào staging nằm sau Google SSO (AWS Cognito → Google IdP), không tự
-động hoá được — phải chạy `scripts/save_auth.py`. Còn đăng nhập app fotowa ở `/users/sign_in` là
-form email/password bình thường, fixture `logged_in` tự điền một lần cho cả session.
-
-**Mọi fixture đều `scope="session"`** ⇒ các lần chạy diễn ra trong **một tab duy nhất**, mỗi test
-tiếp tục từ nơi test trước để lại. Test chạy theo thứ tự khai báo và thứ tự đó có ý nghĩa; chạy
-riêng một test sẽ bắt đầu từ `about:blank` nên test phụ thuộc test trước sẽ fail.
-
-**Không có screenshot/trace khi fail.** `conftest.py` ghi đè fixture `context`/`page` của
-pytest-playwright, làm vô hiệu hoá hook artifact dù `pytest.ini` đã bật. Muốn xem trực tiếp lúc
-fail thì chạy `pytest --pdb` — Chrome vẫn sống và giữ nguyên state cho tới khi bạn thoát debugger.
-
-**Fotowa render header hai
-lần (desktop + mobile).**  selector ngây thơ sẽ báo `strict mode violation` vì Playwright chạy ở *strict mode*;  nên dùng selector duy nhất.
-
-**Không gọi hành động trong `__init__` của page object.** Chỉ khai báo `Locator` lazy
-
-
-**Timeout khi chờ form đăng nhập** nếu bị kẹt ở trang Google SSO tực session đã
-lưu hết hạn, chạy lại `scripts/save_auth.py`.
+Xem `TODO.md`, mục **Lưu ý khi viết test**.

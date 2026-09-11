@@ -1,11 +1,13 @@
 import os
-from collections.abc import Iterator
+import re
+from collections.abc import Generator, Iterator
 from pathlib import Path
 
 import pytest
 from dotenv import load_dotenv
 from playwright.sync_api import (
     BrowserContext,
+    Error,
     Page,
     Playwright,
     sync_playwright,
@@ -72,8 +74,44 @@ def browser_context(playwright_instance: Playwright) -> Iterator[BrowserContext]
     context.close()
 
 
-# Hai fixture này ghi đè `context`/`page` gốc của pytest-playwright, bỏ qua fixture `new_context` của plugin,
-# nên --screenshot và --tracing trong pytest.ini không hoạt động.
+# Đánh dấu test fail để fixture `page` biết có cần chụp ảnh trước khi đóng tab hay không.
+# `when == "setup"` cũng tính: fixture hỏng (không tìm được slot trống...) cũng cần ảnh.
+_FAILED = pytest.StashKey[bool]()
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_makereport(
+    item: pytest.Item, call: pytest.CallInfo[None]
+) -> Generator[None, pytest.TestReport, pytest.TestReport]:
+    report = yield
+    if report.failed:
+        item.stash[_FAILED] = True
+    return report
+
+
+def _capture_screenshot(page: Page, request: pytest.FixtureRequest) -> None:
+    """Chụp màn hình cuối test — phần pytest-playwright đáng lẽ làm trong `new_context`.
+
+    `context`/`page` dưới đây ghi đè fixture gốc của plugin nên `new_context` bị bỏ qua, kéo theo
+    cả phần lưu artifact. Ở đây tự chụp lại, theo đúng ngữ nghĩa `--screenshot` của plugin:
+    `on` chụp mọi test, `only-on-failure` chỉ chụp test fail, `off` không chụp.
+    """
+    option = request.config.getoption("--screenshot")
+    failed = request.node.stash.get(_FAILED, False)
+    if option == "off" or (option == "only-on-failure" and not failed):
+        return
+
+    out_dir = ROOT / str(request.config.getoption("--output"))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    slug = re.sub(r"[^\w.-]+", "-", request.node.nodeid)
+    status = "failed" if failed else "finished"
+    try:
+        page.screenshot(path=str(out_dir / f"{slug}-{status}.png"), full_page=True)
+    except Error as exc:
+        # Tab có thể đã crash/đóng — không để lỗi teardown che mất lỗi thật của test.
+        print(f"Không chụp được màn hình cho {request.node.nodeid}: {exc}")
+
+
 @pytest.fixture(scope="session")
 def context(browser_context: BrowserContext) -> BrowserContext:
     return browser_context
@@ -82,9 +120,10 @@ def context(browser_context: BrowserContext) -> BrowserContext:
 # Scope = function: mỗi test một tab mới, bắt đầu từ `about:blank` sạch.
 # Đổi lại, mỗi test phải tự `goto_*` tới trang nó cần — không ăn ké trang test trước để lại.
 @pytest.fixture
-def page(context: BrowserContext) -> Iterator[Page]:
+def page(context: BrowserContext, request: pytest.FixtureRequest) -> Iterator[Page]:
     page = context.new_page()
     yield page
+    _capture_screenshot(page, request)
     page.close()
 
 
