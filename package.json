@@ -1,0 +1,26 @@
+{
+  "name": "fotowa-automation-project",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bộ test UI end-to-end cho dự án fotowa, viết bằng Playwright + TypeScript theo mô hình POM (Page Object Model).",
+  "type": "commonjs",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "check": "tsc --noEmit && playwright test --list",
+    "auth": "tsx scripts/save-auth.ts",
+    "report": "playwright show-report"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tuanpmdev156/fotowa.git"
+  },
+  "license": "ISC",
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^26.5.1",
+    "dotenv": "^17.4.2",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
+  }
+}

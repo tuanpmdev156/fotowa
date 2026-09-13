@@ -1,0 +1,25 @@
+{
+  // Strict mode là lý do chính của việc port sang TypeScript: một fixture gõ sai tên
+  // trở thành lỗi biên dịch thay vì lỗi runtime. Không nới lỏng để code cũ compile được.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "types": ["node"],
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": true,
+
+    "noEmit": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true
+  },
+  "include": ["src", "e2e", "scripts/**/*.ts", "playwright.config.ts"],
+  "exclude": ["node_modules", ".auth", "test-results", "playwright-report"]
+}

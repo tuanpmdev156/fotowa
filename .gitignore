@@ -3,8 +3,11 @@
 
 # Local environment variables / credentials
 .env
-.venv/
-__pycache__/
-*.py[cod]
-.pytest_cache/
+
+# Node / TypeScript
+node_modules/
+
+# Playwright artifacts
 test-results/
+playwright-report/
+blob-report/
