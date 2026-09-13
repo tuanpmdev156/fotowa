@@ -1,6 +1,4 @@
 {
-  // Strict mode là lý do chính của việc port sang TypeScript: một fixture gõ sai tên
-  // trở thành lỗi biên dịch thay vì lỗi runtime. Không nới lỏng để code cũ compile được.
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022", "DOM"],

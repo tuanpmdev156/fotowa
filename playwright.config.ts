@@ -24,10 +24,7 @@ export default defineConfig({
   use: {
     channel: 'chrome', // Google Chrome đã cài sẵn, không dùng bundled chromium
     headless: false,
-    // `fullPage: true` để giữ đúng hành vi bản Python (`page.screenshot(full_page=True)`);
-    // mặc định của Playwright chỉ chụp phần viewport.
     screenshot: { mode: 'only-on-failure', fullPage: true },
-
     // Giữ nguyên default của Playwright: 30s cho action/navigation, 5s cho expect.
     actionTimeout: 0,
     navigationTimeout: 0,
