@@ -1,6 +1,6 @@
 import { requireCredentials, test } from '../src/fixtures/test';
 
-// Không cần credentials: test này chỉ xem form login có hiện ra không.
+// Verify form login hiển thị.
 test('TC_01_login_form_is_displayed', async ({ loginPage, loggedOut }) => {
   void loggedOut;
   await loginPage.gotoHomePage();

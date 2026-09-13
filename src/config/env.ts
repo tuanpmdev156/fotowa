@@ -1,15 +1,3 @@
-/**
- * Module DUY NHẤT được phép đọc `process.env`.
- *
- * Bản Python từng dính bẫy thứ tự nạp: `conftest` import `pages.*` trước `load_dotenv()`, nên một
- * `os.getenv` đặt trong thân class âm thầm lấy giá trị mặc định. TypeScript có đúng bẫy đó với
- * `const X = process.env.Y` ở top-level.
- *
- * Cách chặn về mặt cấu trúc: file này export **hàm**, không export hằng. Hàm chỉ chạy khi được gọi,
- * tức là sau khi entry point đã nạp dotenv. Chỉ 2 entry point import `dotenv/config`:
- * `playwright.config.ts` và `scripts/save-auth.ts`.
- */
-
 import * as path from 'node:path';
 
 export interface Credentials {
@@ -19,13 +7,6 @@ export interface Credentials {
 
 const ROOT = path.resolve(__dirname, '..', '..');
 
-/**
- * Đọc biến môi trường, coi chuỗi rỗng như chưa set.
- *
- * Python `if not (email and password)` bắt cả hai trường hợp; `??` của TS chỉ bắt `undefined`,
- * nên `TEST_EMAIL=` trong `.env` sẽ lọt qua và điền email rỗng vào form login.
- * Không trim: mật khẩu có thể chứa khoảng trắng ở đầu/cuối.
- */
 function read(name: string): string | undefined {
   const value = process.env[name];
   return value === undefined || value === '' ? undefined : value;
@@ -40,7 +21,7 @@ export function baseUrl(): string {
   return url.replace(/\/+$/, '');
 }
 
-/** Tài khoản user fotowa. `null` khi thiếu một trong hai — test gọi `skipWithoutCredentials()`. */
+/** Tài khoản user fotowa. */
 export function credentials(): Credentials | null {
   const email = read('TEST_EMAIL');
   const password = read('TEST_PASSWORD');
@@ -67,7 +48,7 @@ export function profileDir(): string {
     : path.resolve(ROOT, configured);
 }
 
-/** Chỉ `scripts/save-auth.ts` dùng. Không có code nào đọc file này — xem chú thích trong script. */
+/** Chỉ `scripts/save-auth.ts` dùng */
 export function authStateFile(): string {
   const configured = read('AUTH_STATE');
   return configured === undefined
@@ -75,7 +56,7 @@ export function authStateFile(): string {
     : path.resolve(ROOT, configured);
 }
 
-/** Chỉ `scripts/save-auth.ts` dùng. Mặc định 5 phút để đăng nhập Google bằng tay. */
+/** Chỉ `scripts/save-auth.ts` dùng. Mặc định 5 phút để đăng nhập tài khoản Google thủ công. */
 export function ssoLoginTimeoutMs(): number {
   const raw = read('GOOGLE_SSO_LOGIN_TIMEOUT_MS');
   if (raw === undefined) {

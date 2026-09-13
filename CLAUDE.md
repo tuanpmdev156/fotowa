@@ -46,9 +46,9 @@ e2e/user-02-photographer-profile.spec.ts    2 tests
 e2e/user-03-booking-request.spec.ts         5 tests (slot echo, payment table, long-distance fee)
 scripts/save-auth.ts                        One-time manual Google SSO
 dom-snapshots/user/booking/*.html           Saved DOM for writing XPath offline — numbers are stale
-plan/typescript-migration.md                The Python → TypeScript port (done)
-plan/booking-price-check.md                 Write-up of the payment/fee verification work
-plan/booking-confirm-payment.md             Plan for the review + payment page (blocked on its DOM)
+planS/typescript-migration.md               The Python → TypeScript port (done)
+planS/booking-price-check.md                Write-up of the payment/fee verification work
+planS/booking-confirm-payment.md            Plan for the review + payment page (blocked on its DOM)
 .env.example                                Committed; `.env` and `.auth/` are gitignored
 ```
 

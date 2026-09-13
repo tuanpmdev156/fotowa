@@ -102,6 +102,34 @@ screenshot: 'off'                                         // không chụp
 
 ---
 
+## Cấu trúc thư mục
+
+```
+fotowa-automation-project/
+├── e2e/                      # 9 test case (*.spec.ts), mỗi file một nhóm chức năng
+├── src/
+│   ├── config/               # env.ts — nơi duy nhất đọc biến môi trường
+│   ├── fixtures/             # test.ts — toàn bộ fixture + signIn()
+│   ├── pages/                # Page Object (*.page.ts), chia theo role rồi tới trang
+│   └── utils/                # format.ts — pad2 / yen / plusOneHour / escapeRegExp
+├── scripts/                  # save-auth.ts — đăng nhập Google SSO tay (`npm run auth`)
+├── dom-snapshots/            # DOM đã lưu để viết XPath offline (số liệu đã cũ)
+├── planS/                    # Ghi chép kế hoạch từng mảng việc
+├── .auth/                    # (gitignore) chrome-profile giữ cookie SSO + cache
+├── test-results/             # (gitignore) screenshot khi test fail
+├── playwright-report/        # (gitignore) HTML report
+├── playwright.config.ts      # testDir, workers, channel chrome, screenshot...
+├── tsconfig.json             # strict, noEmit — chỉ để type-check
+├── package.json              # npm scripts: test / check / auth / report
+├── .env / .env.example       # `.env` là giá trị thật, đã gitignore
+├── CLAUDE.md                 # Context cho Claude Code
+├── TODO.md                   # Backlog + "Lưu ý khi viết test"
+└── README.md
+```
+
+
+---
+
 ## Lưu ý khi viết test
 
 Xem `TODO.md`, mục **Lưu ý khi viết test**.

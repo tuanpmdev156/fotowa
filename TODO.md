@@ -47,7 +47,7 @@ Các việc còn tồn của bộ test. Cập nhật lần cuối: 2026-09-13.
       tiếng Nhật `確認・決済に進む` (đọc được từ `error-context.md` sinh ra khi chạy verify hướng âm).
       TC submit cần `expectSubmitted()` (assert đã rời `/private_offers/new`).
 - [ ] **Trang review + thanh toán** (sau khi submit) — plan đầy đủ ở
-      `plan/booking-confirm-payment.md`. Đang chặn ở Bước 0: chưa capture DOM nên chưa biết ô thẻ
+      `planS/booking-confirm-payment.md`. Đang chặn ở Bước 0: chưa capture DOM nên chưa biết ô thẻ
       là input thường hay iframe cổng thanh toán. Đã chốt: đặt đơn thật trên staging, **huỷ tay** —
       khi làm tới đây, mỗi lần chạy cả suite sinh một đơn và ăn mất một slot của
       `PHOTOGRAPHER_NAME`.
@@ -109,7 +109,7 @@ Các việc còn tồn của bộ test. Cập nhật lần cuối: 2026-09-13.
 > Tên file/hàm trong đó giữ nguyên làm tư liệu lịch sử.
 
 - [x] **Port toàn bộ suite từ Python/pytest sang TypeScript/`@playwright/test`.** Plan ở
-      `plan/typescript-migration.md`. `pages/` + `tests/` → `src/pages/` + `src/fixtures/` + `e2e/`;
+      `planS/typescript-migration.md`. `pages/` + `tests/` → `src/pages/` + `src/fixtures/` + `e2e/`;
       `conftest.py` → `src/fixtures/test.ts` + `src/config/env.ts` + `playwright.config.ts`;
       `scripts/check.py` → `npm run check` (`tsc --noEmit` + `playwright test --list`);
       `save_auth.py` → `scripts/save-auth.ts` (chạy bằng `tsx`: type-stripping của Node 24 không đổi
@@ -131,7 +131,7 @@ Các việc còn tồn của bộ test. Cập nhật lần cuối: 2026-09-13.
       `page.close()`, ghi PNG full-page ra `<--output>/<nodeid>-{failed,finished}.png`.
       *(Đã bị thay thế: capture built-in của `@playwright/test` lo hết, xem mục port ở trên.)*
 
-- [x] **Test độc lập — mỗi test một tab, tự điều hướng** (bước 1-6 của `plan/independent-tests.md`,
+- [x] **Test độc lập — mỗi test một tab, tự điều hướng** (bước 1-6 của `planS/independent-tests.md`,
       file plan đã xoá). `page` + các fixture page object `session` → `function`; `selected_slot`
       tách đôi thành `available_slot` (session, chỉ trả dữ liệu, tự mở/đóng tab scratch) và
       `selected_slot` (function, đường click thật, chỉ `TC_01` dùng); thêm
@@ -152,7 +152,7 @@ Các việc còn tồn của bộ test. Cập nhật lần cuối: 2026-09-13.
       `select_filming_location()` → gate `has_long_distance_fee_warning()` (không có cảnh báo thì
       `skip`, vì địa điểm không phát sinh phí là dữ liệu hợp lệ) → `expect_long_distance_fee_charged()`
       → `expect_payment_table_matches_selection()` lo phần tổng. Kế hoạch + lý do ở
-      `plan/booking-price-check.md`. Số đọc được lúc verify hướng âm:
+      `planS/booking-price-check.md`. Số đọc được lúc verify hướng âm:
       `撮影料金 ¥24,200 + 遠方出張料 ¥3,000 = 合計 ¥27,200`.
 
 - [x] Giá tiền trang đặt lịch, cả hai nhánh (không/có option): `read_option_cards()`,
